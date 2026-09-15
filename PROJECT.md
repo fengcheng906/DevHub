@@ -45,12 +45,13 @@
 
 - [x] 任务 1：安装 VS Code + 中文界面 ✅（v1.137.0，中文语言包已装并设为启动语言）
 - [x] 任务 2：创建 DevHub 工程根目录和 5 个标准子目录 ✅（位置：`C:\DevHub`）
-- [ ] 任务 3：命令行导航练习
-- [x] 任务 4：安装 Git + 首次配置 ✅（v2.55.0；user.name=周承俊，邮箱暂用占位 `zhouchengjun@local.dev`，GitHub 注册后更换为官方 noreply 邮箱；默认分支已设为 main）
-- [ ] 任务 5：注册 GitHub + 第一个仓库（**进行中**：注册页已在浏览器打开）
-- [ ] 任务 6：填写本文件（PROJECT.md）
+- [ ] 任务 3：命令行导航练习（**进行中**：第 1 组 pwd/cd/ls 已完成 ✅；第 2~4 组待继续，已于 18:22 暂停，用户外出约 3 小时）
+- [x] 任务 4：安装 Git + 首次配置 ✅（v2.55.0；user.name=周承俊；邮箱 `fengcheng906@users.noreply.github.com`；默认分支 main）
+- [x] 任务 5：注册 GitHub + 第一个仓库 ✅（**2026-09-15 达成**：账号 `fengcheng906`，仓库 **github.com/fengcheng906/DevHub** 已上线，首次推送成功，main 分支已建立跟踪）
+- [x] 任务 6：填写本文件（PROJECT.md）✅
 
-> 附注：Python 3.13.15 已提前装好（第 2 周任务 1 完成），pip 镜像源尚未配置。
+> 附注：Python 3.13.15 已提前装好并通过运行验收（测试脚本 `02_Learning/test_python.py` 输出正常）；pip 已配置清华镜像源（第 2 周任务 2 提前完成）。
+> 命令行速查笔记已存至 `C:\DevHub\03_Notes\2026-09-15-命令行速查笔记.md`。
 > DevHub 结构：01_Projects（项目代码）/ 02_Learning（学习材料）/ 03_Notes（笔记）/ 04_Assets（素材）/ 05_Output（成品），说明见 `C:\DevHub\README.txt`
 
 ---
