@@ -45,7 +45,9 @@
 
 - [x] 任务 1：安装 VS Code + 中文界面 ✅（v1.137.0，中文语言包已装并设为启动语言）
 - [x] 任务 2：创建 DevHub 工程根目录和 5 个标准子目录 ✅（位置：`C:\DevHub`）
-- [ ] 任务 3：命令行导航练习（**进行中**：第 1 组 pwd/cd/ls 已完成 ✅；第 2~4 组待继续，已于 18:22 暂停，用户外出约 3 小时）
+- [x] 任务 3：命令行导航练习 ✅（**2026-09-16 全部完成**：pwd/cd/ls、mkdir、echo>重定向、cat、cd ..、ls 目录、history 共 4 组练习全通过；亲手创建 day1 文件夹与 note.txt，已提交 GitHub 提交号 7fe8b7c）
+
+**🎉 第 1 周（搭建数字工作台）全部通关（2026-09-16）。下一站：第 2 周 Python——批量文件重命名助手 v0.1。**
 - [x] 任务 4：安装 Git + 首次配置 ✅（v2.55.0；user.name=周承俊；邮箱 `fengcheng906@users.noreply.github.com`；默认分支 main）
 - [x] 任务 5：注册 GitHub + 第一个仓库 ✅（**2026-09-15 达成**：账号 `fengcheng906`，仓库 **github.com/fengcheng906/DevHub** 已上线，首次推送成功，main 分支已建立跟踪）
 - [x] 任务 6：填写本文件（PROJECT.md）✅
