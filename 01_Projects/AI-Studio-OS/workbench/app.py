@@ -16,6 +16,13 @@ from pathlib import Path
 
 import core
 
+# 拖拽支持：装了 tkinterdnd2 就能拖文件夹进窗口；没装也不影响其他功能
+try:
+    from tkinterdnd2 import DND_FILES, TkinterDnD
+    HAS_DND = True
+except ImportError:
+    HAS_DND = False
+
 
 class WorkbenchApp:
     def __init__(self, root: tk.Tk):
@@ -97,17 +104,27 @@ class WorkbenchApp:
                                      command=self.open_rename)
         self.btn_rename.pack(side=tk.LEFT, padx=(6, 0))
 
-        self.status_var = tk.StringVar(value="请先选择要整理的文件夹")
+        self.status_var = tk.StringVar(
+            value=("请选择一个文件夹（或直接把它拖进窗口）" if HAS_DND
+                   else "请先选择要整理的文件夹"))
         ttk.Label(self.root, textvariable=self.status_var, padding=(10, 4),
                   foreground="#555555").pack(fill=tk.X)
+
+        # 拖拽支持：整个窗口都接受拖入
+        if HAS_DND and hasattr(self.root, "drop_target_register"):
+            self.root.drop_target_register(DND_FILES)
+            self.root.dnd_bind("<<Drop>>", self._on_drop)
 
     # ---------- 四个功能 ----------
 
     def choose_folder(self):
         """① 选择文件夹（带安全检查）。"""
         folder = filedialog.askdirectory(title="选择要整理的文件夹")
-        if not folder:
-            return
+        if folder:
+            self._set_folder(folder)
+
+    def _set_folder(self, folder: str):
+        """共用入口：对话框选择 和 拖拽进来 都走这里（带安全检查）。"""
         ok, reason = core.is_safe_folder(folder)
         if not ok:
             messagebox.showwarning("安全拦截", f"这个文件夹不允许整理：\n\n{reason}")
@@ -120,7 +137,29 @@ class WorkbenchApp:
         self.btn_run.config(state=tk.DISABLED)
         self.btn_undo.config(
             state=tk.NORMAL if core.latest_log(folder) else tk.DISABLED)
-        self.status_var.set("文件夹已选择，点「② 扫描预览」查看整理方案")
+        self.status_var.set("文件夹已选择，点「② 扫描预览」查看整理方案"
+                            + ("（也可以直接把文件/文件夹拖进窗口）"
+                               if HAS_DND else ""))
+
+    def _on_drop(self, event):
+        """拖拽放下的回调：取第一个拖进来的路径（文件取其所在文件夹）。"""
+        data = event.data.strip()
+        if not data:
+            return
+        # Windows 拖来的路径：含空格时会带花括号 {}，此时用 splitlist 拆分；
+        # 不带花括号的普通路径不能走 splitlist（反斜杠会被当转义符弄坏）
+        if data.startswith("{"):
+            try:
+                paths = self.root.tk.splitlist(data)
+            except tk.TclError:
+                paths = [data]
+        else:
+            paths = [data]
+        if not paths:
+            return
+        p = Path(paths[0])
+        folder = str(p if p.is_dir() else p.parent)
+        self._set_folder(folder)
 
     def do_scan(self):
         """② 扫描预览：只生成计划，不改任何文件。"""
@@ -360,7 +399,7 @@ class WorkbenchApp:
 
 
 def main():
-    root = tk.Tk()
+    root = TkinterDnD.Tk() if HAS_DND else tk.Tk()
     WorkbenchApp(root)
     root.mainloop()
 
