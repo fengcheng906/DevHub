@@ -9,3 +9,7 @@
 01_Projects/AI-Studio-OS/dist/
 01_Projects/AI-Studio-OS/build/
 01_Projects/AI-Studio-OS/build_log.txt
+01_Projects/AI-Studio-OS/datatool/build/
+01_Projects/AI-Studio-OS/datatool/dist/
+01_Projects/AI-Studio-OS/datatool/*.spec
+01_Projects/AI-Studio-OS/datatool/tests/sandbox/
