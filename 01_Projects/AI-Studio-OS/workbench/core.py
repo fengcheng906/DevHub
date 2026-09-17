@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 
 APP_NAME = "智能文件工作台"
-APP_VERSION = "0.1.3"
+APP_VERSION = "0.1.4"
 
 # 整理记录的存放目录（整理时会跳过这个目录，不会把它当作文件分类）
 LOG_DIR_NAME = "_工作台记录"
@@ -162,42 +162,72 @@ def is_safe_folder(folder) -> tuple[bool, str]:
 
 # ---------------- 扫描 ----------------
 
-def scan_folder(folder) -> list[dict]:
-    """扫描文件夹第一层的所有文件（不进子文件夹），返回文件信息列表。"""
+def _file_info(p: Path, folder: Path) -> dict:
+    """生成单个文件的信息字典。"""
+    st = p.stat()
+    return {
+        "name": p.name,
+        "suffix": p.suffix.lower(),
+        "size": st.st_size,
+        "mtime": st.st_mtime,
+        "modified": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M"),
+        "path": str(p),                    # 文件当前完整位置
+        "rel": str(p.relative_to(folder)), # 相对所选文件夹的路径
+    }
+
+
+def scan_folder(folder, recursive: bool = False) -> list[dict]:
+    """扫描文件夹中的文件。
+
+    recursive=False：只看第一层文件（v0.1 的原有行为）
+    recursive=True ：包含所有子文件夹里的文件；自动跳过隐藏路径、
+                     工作台记录目录；"已经归位"的判断在 build_plan 里做
+    """
     folder = Path(folder)
+    if not recursive:
+        return [_file_info(p, folder) for p in sorted(folder.iterdir()) if p.is_file()]
+
     result = []
-    for p in sorted(folder.iterdir()):
-        if p.is_file():
-            st = p.stat()
-            result.append({
-                "name": p.name,
-                "suffix": p.suffix.lower(),
-                "size": st.st_size,
-                "mtime": st.st_mtime,
-                "modified": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M"),
-            })
+    for p in sorted(folder.rglob("*")):
+        if not p.is_file():
+            continue
+        rel = p.relative_to(folder)
+        # 跳过隐藏路径（.开头）和工作台记录目录
+        if any(part.startswith(".") for part in rel.parts):
+            continue
+        if rel.parts[0] == LOG_DIR_NAME:
+            continue
+        result.append(_file_info(p, folder))
     return result
 
 
 # ---------------- 整理计划（只规划，不执行） ----------------
 
-def build_plan(folder, rules: dict | None = None, mode: str = "type") -> list[dict]:
+def build_plan(folder, rules: dict | None = None, mode: str = "type",
+               recursive: bool = False) -> list[dict]:
     """根据规则为每个文件生成整理计划。注意：本函数不修改任何文件。
 
     mode="type"  按类型分类（图片/文档/...，无规则的文件跳过）
     mode="date"  按修改月份归档（2026-09/...，不按类型过滤，所有文件都归档）
+    recursive    是否包含子文件夹里的文件
     """
     folder = Path(folder)
     ext_map = build_ext_map(rules)
     actions = []
 
-    for info in scan_folder(folder):
+    for info in scan_folder(folder, recursive=recursive):
         name = info["name"]
+        src = Path(info["path"])
+
+        # 跳过记录目录里的文件（非递归模式扫描不到，这里兜底）
+        rel_parts = Path(info["rel"]).parts
+        if rel_parts and rel_parts[0] == LOG_DIR_NAME:
+            continue
 
         # 隐藏文件不处理
         if name.startswith("."):
             actions.append({
-                "file": name,
+                "file": info["rel"],
                 "action": "跳过（隐藏文件）",
                 "status": "SKIP",
             })
@@ -210,7 +240,7 @@ def build_plan(folder, rules: dict | None = None, mode: str = "type") -> list[di
             category = ext_map.get(info["suffix"])
             if category is None:
                 actions.append({
-                    "file": name,
+                    "file": info["rel"],
                     "action": "跳过（没有匹配的分类规则）",
                     "status": "SKIP",
                 })
@@ -219,16 +249,25 @@ def build_plan(folder, rules: dict | None = None, mode: str = "type") -> list[di
         target_dir = folder / category
         target = target_dir / name
 
+        # 已经归位的文件不重复处理（比如上次整理过的 图片/照片.jpg）
+        if src.parent == target_dir:
+            actions.append({
+                "file": info["rel"],
+                "action": f"已在 [{category}] 中，无需移动",
+                "status": "SKIP",
+            })
+            continue
+
         if target.exists():
             # 同名冲突：绝不覆盖，留给用户自己决定
             actions.append({
-                "file": name,
+                "file": info["rel"],
                 "action": f"冲突：[{category}] 里已有同名文件，本次不动它",
                 "status": "CONFLICT",
             })
         else:
             actions.append({
-                "file": name,
+                "file": info["rel"],
                 "action": f"移入 [{category}] 文件夹",
                 "status": "OK",
                 "target_dir": category,

@@ -78,6 +78,10 @@ class WorkbenchApp:
         ttk.Radiobutton(bottom, text="按日期", variable=self.mode_var,
                         value="date").pack(side=tk.LEFT, padx=(0, 14))
 
+        self.recursive_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(bottom, text="包含子文件夹",
+                        variable=self.recursive_var).pack(side=tk.LEFT, padx=(0, 14))
+
         self.btn_scan = ttk.Button(bottom, text="② 扫描预览", command=self.do_scan,
                                    state=tk.DISABLED)
         self.btn_scan.pack(side=tk.LEFT, padx=(0, 6))
@@ -120,7 +124,9 @@ class WorkbenchApp:
         if not self.folder:
             return
         mode = self.mode_var.get()
-        self.plan = core.build_plan(self.folder, rules=core.load_rules(), mode=mode)
+        recursive = self.recursive_var.get()
+        self.plan = core.build_plan(self.folder, rules=core.load_rules(),
+                                    mode=mode, recursive=recursive)
 
         mode_name = "类型" if mode == "type" else "修改月份"
         self.tree.delete(*self.tree.get_children())

@@ -226,6 +226,45 @@ ok5 = next(a for a in plan5 if a["file"] == "奇怪文件.xyz")
 check("给 .xyz 加规则后变为将移动", ok5["status"] == "OK"
       and ok5["target_dir"] == "杂项")
 
+# ---------- 测试 10：递归扫描子文件夹（v0.1.4） ----------
+print("\n[测试10] 递归扫描：子文件夹里的文件也能整理")
+setup_sandbox()
+nested_dir = SANDBOX / "子文件夹" / "更深"
+nested_dir.mkdir(parents=True)
+(nested_dir / "深处笔记.txt").write_text("藏在深处", encoding="utf-8")
+
+# 10.1 非递归：看不到深处文件
+plan_flat = core.build_plan(SANDBOX)
+check("非递归模式不扫描子文件夹",
+      all("深处笔记" not in a["file"] for a in plan_flat))
+
+# 10.2 递归：能看到，且已归位/记录目录被跳过
+plan_rec = core.build_plan(SANDBOX, recursive=True)
+status_rec = {a["file"]: a["status"] for a in plan_rec}
+# Windows 下相对路径用反斜杠，与产品内部表示保持一致
+deep_rel = str(Path("子文件夹") / "更深" / "深处笔记.txt")
+img_rel = str(Path("图片") / "照片A.jpg")
+check("递归模式发现深处文件", status_rec.get(deep_rel) == "OK",
+      f"实际: {status_rec.get(deep_rel)}")
+check("已归位的 图片/照片A.jpg 标记为无需移动",
+      status_rec.get(img_rel) == "SKIP",
+      f"实际: {status_rec.get(img_rel)}")
+log_dir_files = [a for a in plan_rec if "_工作台记录" in a["file"]]
+check("工作台记录目录不被扫描", len(log_dir_files) == 0)
+
+# 10.3 执行：深处文件移到顶层分类目录，撤销后回到原嵌套位置
+records_rec = core.execute_plan(SANDBOX, plan_rec)
+moved_rec = [r for r in records_rec if r["operation"] == "move"]
+check("递归执行移动数 = 6（5 顶层 + 1 深处）", len(moved_rec) == 6,
+      f"实际 {len(moved_rec)}")
+check("深处文件已到 文档/", (SANDBOX / "文档" / "深处笔记.txt").exists())
+log_rec, _ = core.write_log(SANDBOX, records_rec, note="递归测试")
+restored_rec, errors_rec, removed_rec = core.undo_from_log(log_rec)
+check("递归撤销恢复 6 个文件", restored_rec == 6,
+      f"实际 {restored_rec}，错误 {errors_rec}")
+check("深处文件回到原嵌套位置",
+      (nested_dir / "深处笔记.txt").exists())
+
 # ---------- 总结 ----------
 print("\n" + "=" * 60)
 print(f"测试结果：通过 {passed} 项，失败 {failed} 项")
