@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 
 APP_NAME = "智能文件工作台"
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.1.1"
 
 # 整理记录的存放目录（整理时会跳过这个目录，不会把它当作文件分类）
 LOG_DIR_NAME = "_工作台记录"
@@ -196,6 +196,11 @@ def execute_plan(folder, plan: list[dict]) -> list[dict]:
             })
             continue
 
+        # 记录这个目录是不是本次整理才创建的（撤销时要清理空目录）
+        created_dir = None
+        if not dst.parent.exists():
+            created_dir = str(dst.parent)
+
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(src), str(dst))
         records.append({
@@ -203,6 +208,8 @@ def execute_plan(folder, plan: list[dict]) -> list[dict]:
             "operation": "move",
             "from": str(src),
             "to": str(dst),
+            # 记录"这个目录是本次整理才创建的"，撤销时用来清理空目录
+            "created_dir": created_dir,
         })
     return records
 
@@ -226,12 +233,15 @@ def write_log(folder, records: list[dict], note: str = "") -> tuple[Path, Path]:
         "folder": str(folder),
         "note": note,
         "operations": records,
+        # 本次整理才创建的目录（撤销时若已空则清理掉）
+        "created_dirs": sorted({
+            r["created_dir"] for r in records if r.get("created_dir")
+        }),
     }
     log_file.write_text(
         json.dumps(data, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-
     # TXT 报告：给人看的
     report = log_dir / f"report_{stamp}.txt"
     moved = [r for r in records if r["operation"] == "move"]
@@ -256,8 +266,13 @@ def write_log(folder, records: list[dict], note: str = "") -> tuple[Path, Path]:
 
 # ---------------- 撤销 ----------------
 
-def undo_from_log(log_file) -> tuple[int, list[str]]:
-    """根据日志把文件搬回原位。返回 (成功恢复数量, 出错信息列表)。"""
+def undo_from_log(log_file) -> tuple[int, list[str], list[str]]:
+    """根据日志把文件搬回原位。
+
+    返回 (成功恢复数量, 出错信息列表, 已清理的空目录列表)。
+    目录清理规则：只清理"本次整理才创建"且"撤销后已空"的目录；
+    用 os.rmdir 语义（目录非空时拒绝删除），绝不误删用户原有内容。
+    """
     data = json.loads(Path(log_file).read_text(encoding="utf-8"))
     restored = 0
     errors = []
@@ -278,7 +293,20 @@ def undo_from_log(log_file) -> tuple[int, list[str]]:
         shutil.move(str(now_pos), str(old_pos))
         restored += 1
 
-    return restored, errors
+    # 清理本次整理才创建、且现在已空的目录
+    removed_dirs = []
+    for d in data.get("created_dirs", []):
+        d = Path(d)
+        if not d.exists():
+            continue
+        try:
+            d.rmdir()  # 只允许删空目录，非空会抛 OSError
+            removed_dirs.append(str(d))
+        except OSError:
+            # 目录里还有别的东西（用户自己放进去的），绝不动
+            pass
+
+    return restored, errors, removed_dirs
 
 
 def latest_log(folder) -> Path | None:

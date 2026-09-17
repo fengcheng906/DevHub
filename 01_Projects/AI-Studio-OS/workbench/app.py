@@ -12,6 +12,7 @@
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from pathlib import Path
 
 import core
 
@@ -174,8 +175,11 @@ class WorkbenchApp:
         if not answer:
             return
 
-        restored, errors = core.undo_from_log(log_file)
+        restored, errors, removed_dirs = core.undo_from_log(log_file)
         msg = f"成功恢复 {restored} 个文件到原位置。"
+        if removed_dirs:
+            msg += f"\n\n清理了 {len(removed_dirs)} 个空文件夹：" + "、".join(
+                Path(d).name for d in removed_dirs)
         if errors:
             msg += "\n\n以下文件没能恢复：\n" + "\n".join(errors)
         messagebox.showinfo("撤销完成", msg)

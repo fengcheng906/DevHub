@@ -121,17 +121,45 @@ check("日志里记录了 5 次移动", len(
      if r["operation"] == "move"]) == 5)
 
 # ---------- 测试 5：撤销 ----------
-print("\n[测试5] 撤销：文件全部恢复原位")
-restored, errors = core.undo_from_log(log_file)
+print("\n[测试5] 撤销：文件全部恢复原位，空分类文件夹被清理")
+restored, errors, removed_dirs = core.undo_from_log(log_file)
 check("撤销成功 5 个文件", restored == 5, f"实际 {restored}，错误 {errors}")
 check("笔记.txt 回到原位", (SANDBOX / "笔记.txt").exists())
 check("电影.mp4 回到原位", (SANDBOX / "电影.mp4").exists())
 check("文档/ 里的副本已消失", not (SANDBOX / "文档" / "笔记.txt").exists())
+check("文档/ 空目录已被清理", not (SANDBOX / "文档").exists())
+check("视频/ 空目录已被清理", not (SANDBOX / "视频").exists())
+check("音乐/ 空目录已被清理", not (SANDBOX / "音乐").exists())
+check("压缩包/ 空目录已被清理", not (SANDBOX / "压缩包").exists())
+check("安装程序/ 空目录已被清理", not (SANDBOX / "安装程序").exists())
+check("原有的 图片/ 目录保留（里面还有冲突文件）",
+      (SANDBOX / "图片" / "照片A.jpg").exists())
+check("清理目录数 = 5", len(removed_dirs) == 5, f"实际 {removed_dirs}")
 
 # ---------- 测试 6：找最新日志 ----------
 print("\n[测试6] 定位最新日志")
 latest = core.latest_log(SANDBOX)
 check("能找到最新日志", latest is not None and latest == log_file)
+
+# ---------- 测试 7：目录非空时绝不清理 ----------
+print("\n[测试7] 边界情况：用户往分类目录里放了新东西，撤销不得误删")
+setup_sandbox()  # 重建干净沙盒
+plan2 = core.build_plan(SANDBOX)
+records2 = core.execute_plan(SANDBOX, plan2)
+log2, _ = core.write_log(SANDBOX, records2, note="边界测试")
+
+# 撤销之前，用户手动往"文档"里放一个新文件
+(SANDBOX / "文档" / "用户自己的文件.txt").write_text("这是用户放进去的", encoding="utf-8")
+
+restored2, errors2, removed2 = core.undo_from_log(log2)
+removed_names = [Path(d).name for d in removed2]
+check("文件恢复数量 = 5", restored2 == 5, f"实际 {restored2}，错误 {errors2}")
+check("用户自己的文件.txt 安然无恙",
+      (SANDBOX / "文档" / "用户自己的文件.txt").exists())
+check("非空的 文档/ 目录被保留（没有被误删）", (SANDBOX / "文档").exists()
+      and "文档" not in removed_names)
+check("空的 视频/ 被正常清理", "视频" in removed_names,
+      f"实际清理了: {removed_names}")
 
 # ---------- 总结 ----------
 print("\n" + "=" * 60)
