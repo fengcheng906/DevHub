@@ -1,0 +1,4 @@
+# 测试沙盒是每次运行测试时自动生成的，不入版本库
+tests/sandbox/
+tests/last_test_output.txt
+__pycache__/
