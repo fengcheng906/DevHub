@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 
 APP_NAME = "智能文件工作台"
-APP_VERSION = "0.1.2"
+APP_VERSION = "0.1.3"
 
 # 整理记录的存放目录（整理时会跳过这个目录，不会把它当作文件分类）
 LOG_DIR_NAME = "_工作台记录"
@@ -50,6 +50,74 @@ def build_ext_map(rules: dict | None = None) -> dict:
         for ext in exts:
             mapping[ext.lower()] = category
     return mapping
+
+
+# ---------------- 自定义规则（v0.1.3） ----------------
+
+# 规则配置文件：放在本文件旁边，用户通过界面维护
+RULES_FILE = Path(__file__).with_name("rules.json")
+
+
+def load_rules(path=None) -> dict:
+    """读取用户自定义规则；文件不存在或损坏时回退到内置默认规则。"""
+    path = Path(path) if path else RULES_FILE
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and data:
+                return data
+        except (json.JSONDecodeError, OSError):
+            pass  # 损坏就当没有，回退默认
+    return DEFAULT_RULES
+
+
+def save_rules(rules: dict, path=None) -> None:
+    """把规则保存为 JSON 文件。"""
+    path = Path(path) if path else RULES_FILE
+    path.write_text(
+        json.dumps(rules, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def rules_to_text(rules: dict) -> str:
+    """把规则字典转成用户可编辑的文本格式（每行：类别: .ext .ext2）。"""
+    return "\n".join(f"{name}: {' '.join(exts)}" for name, exts in rules.items())
+
+
+def parse_rules_text(text: str) -> dict:
+    """把用户编辑的文本解析回规则字典。格式错误时抛出 ValueError 并说明行号。"""
+    rules = {}
+    for lineno, raw in enumerate(text.splitlines(), start=1):
+        line = raw.strip()
+        if not line:
+            continue
+        if ":" not in line and "：" not in line:
+            raise ValueError(f"第 {lineno} 行缺少冒号：{line}")
+        name, _, ext_part = line.replace("：", ":").partition(":")
+        name = name.strip()
+        exts = ext_part.split()
+
+        if not name:
+            raise ValueError(f"第 {lineno} 行：类别名称不能为空")
+        if any(c in name for c in '\\/:*?"<>|'):
+            raise ValueError(f"第 {lineno} 行：类别名称含有非法字符（\\/:*?\"<>|）：{name}")
+        if not exts:
+            raise ValueError(f"第 {lineno} 行：{name} 后面没有扩展名")
+
+        cleaned = []
+        for e in exts:
+            e = e.strip().lower()
+            if not e.startswith(".") or len(e) < 2:
+                raise ValueError(f"第 {lineno} 行：扩展名必须以点开头（如 .jpg）：{e}")
+            if not e[1:].isalnum():
+                raise ValueError(f"第 {lineno} 行：扩展名只能含字母和数字：{e}")
+            cleaned.append(e)
+        rules[name] = cleaned
+
+    if not rules:
+        raise ValueError("内容为空：至少写一行规则，例如：图片: .jpg .png")
+    return rules
 
 
 # ---------------- 安全检查 ----------------

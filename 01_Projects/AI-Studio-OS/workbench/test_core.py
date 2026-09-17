@@ -181,6 +181,51 @@ check("月份文件夹已清理", not (SANDBOX / ym).exists())
 check("所有文件回到原位", (SANDBOX / "奇怪文件.xyz").exists()
       and (SANDBOX / "笔记.txt").exists())
 
+# ---------- 测试 9：自定义规则（v0.1.3） ----------
+print("\n[测试9] 自定义规则：解析、保存、加载、生效")
+
+# 9.1 文本解析：往返转换内容不变
+text = core.rules_to_text(core.DEFAULT_RULES)
+check("规则文本往返解析一致", core.parse_rules_text(text) == core.DEFAULT_RULES)
+
+# 9.2 各类格式错误必须报错
+def expect_error(label, bad_text):
+    try:
+        core.parse_rules_text(bad_text)
+        check(label, False, "没有报错")
+    except ValueError:
+        check(label, True)
+
+expect_error("缺冒号报错", "图片 .jpg")
+expect_error("空内容报错", "   \n  ")
+expect_error("扩展名没点报错", "图片: jpg")
+expect_error("非法字符类别名报错", 'a/b: .jpg')
+expect_error("扩展名含特殊字符报错", "图片: .j<g")
+
+# 9.3 自定义规则保存/加载往返（用沙盒里的临时文件，不碰真实配置）
+rules_path = SANDBOX / "test_rules.json"
+custom = {"图纸": [".dwg", ".dxf"], "图片": [".jpg"]}
+core.save_rules(custom, path=rules_path)
+check("保存后可原样加载", core.load_rules(path=rules_path) == custom)
+check("文件损坏时回退默认规则",
+      core.load_rules(path=SANDBOX / "不存在.json") == core.DEFAULT_RULES)
+broken = SANDBOX / "broken.json"
+broken.write_text("不是json{{{", encoding="utf-8")
+check("坏 JSON 回退默认规则", core.load_rules(path=broken) == core.DEFAULT_RULES)
+
+# 9.4 自定义规则在整理中真实生效
+setup_sandbox()
+plan4 = core.build_plan(SANDBOX, rules=custom)
+status4 = {a["file"]: a["status"] for a in plan4}
+check("自定义规则下 .xyz 仍跳过", status4.get("奇怪文件.xyz") == "SKIP")
+extended = dict(custom)
+extended.setdefault("杂项", []).append(".xyz")
+plan5 = core.build_plan(SANDBOX, rules=extended)
+status5 = {a["file"]: a["status"] for a in plan5}
+ok5 = next(a for a in plan5 if a["file"] == "奇怪文件.xyz")
+check("给 .xyz 加规则后变为将移动", ok5["status"] == "OK"
+      and ok5["target_dir"] == "杂项")
+
 # ---------- 总结 ----------
 print("\n" + "=" * 60)
 print(f"测试结果：通过 {passed} 项，失败 {failed} 项")

@@ -87,6 +87,8 @@ class WorkbenchApp:
         self.btn_undo = ttk.Button(bottom, text="④ 撤销上次", command=self.do_undo,
                                    state=tk.DISABLED)
         self.btn_undo.pack(side=tk.LEFT)
+        self.btn_rules = ttk.Button(bottom, text="⑤ 规则管理", command=self.edit_rules)
+        self.btn_rules.pack(side=tk.LEFT, padx=(16, 0))
 
         self.status_var = tk.StringVar(value="请先选择要整理的文件夹")
         ttk.Label(self.root, textvariable=self.status_var, padding=(10, 4),
@@ -118,7 +120,7 @@ class WorkbenchApp:
         if not self.folder:
             return
         mode = self.mode_var.get()
-        self.plan = core.build_plan(self.folder, mode=mode)
+        self.plan = core.build_plan(self.folder, rules=core.load_rules(), mode=mode)
 
         mode_name = "类型" if mode == "type" else "修改月份"
         self.tree.delete(*self.tree.get_children())
@@ -194,6 +196,49 @@ class WorkbenchApp:
         messagebox.showinfo("撤销完成", msg)
         self.status_var.set(f"撤销完成：恢复 {restored} 个文件")
         self.do_scan()
+
+
+    # ---------- 规则管理 ----------
+
+    def edit_rules(self):
+        """⑤ 规则管理：打开一个小窗口编辑分类规则，保存后下次扫描生效。"""
+        win = tk.Toplevel(self.root)
+        win.title("分类规则管理")
+        win.geometry("520x460")
+        win.transient(self.root)
+
+        ttk.Label(
+            win,
+            text="每行一条规则，格式：类别名称: .扩展名1 .扩展名2\n"
+                 "例如：图片: .jpg .png    （保存后，下次「扫描预览」生效）",
+            padding=8, justify=tk.LEFT,
+        ).pack(anchor=tk.W)
+
+        text = tk.Text(win, wrap=tk.NONE, font=("Consolas", 11))
+        text.pack(fill=tk.BOTH, expand=True, padx=8)
+        text.insert("1.0", core.rules_to_text(core.load_rules()))
+
+        btns = ttk.Frame(win, padding=8)
+        btns.pack(fill=tk.X)
+
+        def on_save():
+            try:
+                rules = core.parse_rules_text(text.get("1.0", tk.END))
+            except ValueError as e:
+                messagebox.showerror("格式错误", str(e), parent=win)
+                return
+            core.save_rules(rules)
+            messagebox.showinfo("已保存", "规则已保存，下次「扫描预览」时生效。", parent=win)
+            win.destroy()
+
+        def on_default():
+            text.delete("1.0", tk.END)
+            text.insert("1.0", core.rules_to_text(core.DEFAULT_RULES))
+
+        ttk.Button(btns, text="保存", command=on_save).pack(side=tk.RIGHT)
+        ttk.Button(btns, text="恢复默认规则", command=on_default).pack(
+            side=tk.RIGHT, padx=6)
+        ttk.Button(btns, text="取消", command=win.destroy).pack(side=tk.RIGHT)
 
 
 def main():
