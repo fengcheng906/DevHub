@@ -67,9 +67,16 @@ class WorkbenchApp:
         self.tree.tag_configure("conflict", foreground="#c26600")  # 橙：冲突
         self.tree.tag_configure("skip", foreground="#888888")     # 灰：跳过
 
-        # 底部：操作按钮 + 状态栏
+        # 底部：整理方式 + 操作按钮 + 状态栏
         bottom = ttk.Frame(self.root, padding=10)
         bottom.pack(fill=tk.X)
+
+        ttk.Label(bottom, text="整理方式：").pack(side=tk.LEFT)
+        self.mode_var = tk.StringVar(value="type")
+        ttk.Radiobutton(bottom, text="按类型", variable=self.mode_var,
+                        value="type").pack(side=tk.LEFT)
+        ttk.Radiobutton(bottom, text="按日期", variable=self.mode_var,
+                        value="date").pack(side=tk.LEFT, padx=(0, 14))
 
         self.btn_scan = ttk.Button(bottom, text="② 扫描预览", command=self.do_scan,
                                    state=tk.DISABLED)
@@ -110,8 +117,10 @@ class WorkbenchApp:
         """② 扫描预览：只生成计划，不改任何文件。"""
         if not self.folder:
             return
-        self.plan = core.build_plan(self.folder)
+        mode = self.mode_var.get()
+        self.plan = core.build_plan(self.folder, mode=mode)
 
+        mode_name = "类型" if mode == "type" else "修改月份"
         self.tree.delete(*self.tree.get_children())
         for i, act in enumerate(self.plan):
             suffix = ("." + act["file"].rsplit(".", 1)[-1]) if "." in act["file"] else "（无）"
@@ -127,8 +136,8 @@ class WorkbenchApp:
         n_skip = sum(1 for a in self.plan if a["status"] == "SKIP")
         self.btn_run.config(state=tk.NORMAL if n_ok else tk.DISABLED)
         self.status_var.set(
-            f"扫描完成：{len(self.plan)} 个文件 —— 将移动 {n_ok}，冲突 {n_conflict}，跳过 {n_skip}。"
-            f"确认没问题后点「③ 执行整理」")
+            f"扫描完成（按{mode_name}整理）：{len(self.plan)} 个文件 —— 将移动 {n_ok}，"
+            f"冲突 {n_conflict}，跳过 {n_skip}。确认没问题后点「③ 执行整理」")
 
     def do_execute(self):
         """③ 执行整理：先弹窗确认，再真正移动文件。"""

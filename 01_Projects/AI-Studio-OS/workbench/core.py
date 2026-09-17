@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 
 APP_NAME = "智能文件工作台"
-APP_VERSION = "0.1.1"
+APP_VERSION = "0.1.2"
 
 # 整理记录的存放目录（整理时会跳过这个目录，不会把它当作文件分类）
 LOG_DIR_NAME = "_工作台记录"
@@ -105,6 +105,7 @@ def scan_folder(folder) -> list[dict]:
                 "name": p.name,
                 "suffix": p.suffix.lower(),
                 "size": st.st_size,
+                "mtime": st.st_mtime,
                 "modified": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M"),
             })
     return result
@@ -112,8 +113,12 @@ def scan_folder(folder) -> list[dict]:
 
 # ---------------- 整理计划（只规划，不执行） ----------------
 
-def build_plan(folder, rules: dict | None = None) -> list[dict]:
-    """根据规则为每个文件生成整理计划。注意：本函数不修改任何文件。"""
+def build_plan(folder, rules: dict | None = None, mode: str = "type") -> list[dict]:
+    """根据规则为每个文件生成整理计划。注意：本函数不修改任何文件。
+
+    mode="type"  按类型分类（图片/文档/...，无规则的文件跳过）
+    mode="date"  按修改月份归档（2026-09/...，不按类型过滤，所有文件都归档）
+    """
     folder = Path(folder)
     ext_map = build_ext_map(rules)
     actions = []
@@ -130,14 +135,18 @@ def build_plan(folder, rules: dict | None = None) -> list[dict]:
             })
             continue
 
-        category = ext_map.get(info["suffix"])
-        if category is None:
-            actions.append({
-                "file": name,
-                "action": "跳过（没有匹配的分类规则）",
-                "status": "SKIP",
-            })
-            continue
+        if mode == "date":
+            # 按文件最后修改的月份归档，如 2026-09
+            category = datetime.fromtimestamp(info["mtime"]).strftime("%Y-%m")
+        else:
+            category = ext_map.get(info["suffix"])
+            if category is None:
+                actions.append({
+                    "file": name,
+                    "action": "跳过（没有匹配的分类规则）",
+                    "status": "SKIP",
+                })
+                continue
 
         target_dir = folder / category
         target = target_dir / name
@@ -222,7 +231,9 @@ def write_log(folder, records: list[dict], note: str = "") -> tuple[Path, Path]:
     log_dir = folder / LOG_DIR_NAME
     log_dir.mkdir(exist_ok=True)
 
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # 时间戳精确到毫秒：避免同一秒内两次整理时日志互相覆盖
+    now = datetime.now()
+    stamp = now.strftime("%Y%m%d_%H%M%S") + f"_{now.microsecond // 1000:03d}"
 
     # JSON 日志：撤销功能靠它
     log_file = log_dir / f"undo_{stamp}.json"

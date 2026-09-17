@@ -161,6 +161,26 @@ check("非空的 文档/ 目录被保留（没有被误删）", (SANDBOX / "文�
 check("空的 视频/ 被正常清理", "视频" in removed_names,
       f"实际清理了: {removed_names}")
 
+# ---------- 测试 8：按日期归档模式 ----------
+print("\n[测试8] 按日期归档：不按类型过滤，按修改月份归类")
+setup_sandbox()
+ym = __import__("datetime").datetime.now().strftime("%Y-%m")
+plan3 = core.build_plan(SANDBOX, mode="date")
+ok3 = [a for a in plan3 if a["status"] == "OK"]
+check("日期模式不过滤类型：7 个普通文件全部将移动",
+      len(ok3) == 7, f"实际 {len(ok3)}")
+check("计划目标是本月文件夹", all(a.get("target_dir") == ym for a in ok3))
+records3 = core.execute_plan(SANDBOX, plan3)
+log3, _ = core.write_log(SANDBOX, records3, note="日期模式测试")
+check("奇怪文件.xyz 也被归档（日期模式不按类型过滤）",
+      (SANDBOX / ym / "奇怪文件.xyz").exists())
+check("笔记.txt 进入月份文件夹", (SANDBOX / ym / "笔记.txt").exists())
+restored3, errors3, removed3 = core.undo_from_log(log3)
+check("撤销恢复 7 个文件", restored3 == 7, f"实际 {restored3}，错误 {errors3}")
+check("月份文件夹已清理", not (SANDBOX / ym).exists())
+check("所有文件回到原位", (SANDBOX / "奇怪文件.xyz").exists()
+      and (SANDBOX / "笔记.txt").exists())
+
 # ---------- 总结 ----------
 print("\n" + "=" * 60)
 print(f"测试结果：通过 {passed} 项，失败 {failed} 项")
