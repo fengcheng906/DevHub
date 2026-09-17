@@ -4,3 +4,8 @@
 
 # GUI 冒烟测试临时文件
 01_Projects/AI-Studio-OS/workbench/tests/gui_smoke/
+
+# 打包产物与临时文件
+01_Projects/AI-Studio-OS/dist/
+01_Projects/AI-Studio-OS/build/
+01_Projects/AI-Studio-OS/build_log.txt
