@@ -265,6 +265,58 @@ check("递归撤销恢复 6 个文件", restored_rec == 6,
 check("深处文件回到原嵌套位置",
       (nested_dir / "深处笔记.txt").exists())
 
+# ---------- 测试 11：批量重命名（v0.1.5） ----------
+print("\n[测试11] 批量重命名")
+(SANDBOX / "IMG_01.jpg").write_text("x", encoding="utf-8")
+(SANDBOX / "IMG_02.jpg").write_text("x", encoding="utf-8")
+(SANDBOX / "IMG_03.png").write_text("x", encoding="utf-8")
+
+# 11.1 加序号模式
+rp = core.build_rename_plan(SANDBOX, ["IMG_01.jpg", "IMG_02.jpg", "IMG_03.png"],
+                            mode="serial", prefix="照片-")
+ok_map = {a["file"]: a for a in rp if a["status"] == "OK"}
+check("序号模式改名规划正确",
+      ok_map["IMG_01.jpg"]["target"].endswith("照片-001.jpg")
+      and ok_map["IMG_03.png"]["target"].endswith("照片-003.png"),
+      str([(a["file"], a["action"], a["status"]) for a in rp]))
+
+# 11.2 执行改名 + 撤销
+records_r = core.execute_plan(SANDBOX, rp)
+renamed = [r for r in records_r if r["operation"] == "rename"]
+check("3 个文件被改名", len(renamed) == 3, str(records_r))
+check("旧名字已不存在", not (SANDBOX / "IMG_01.jpg").exists())
+check("新名字已存在", (SANDBOX / "照片-001.jpg").exists())
+log_r, _ = core.write_log(SANDBOX, records_r, note="改名测试")
+restored_r, errors_r, _ = core.undo_from_log(log_r)
+check("改名可撤销（恢复 3 个）", restored_r == 3 and not errors_r,
+      f"恢复 {restored_r}，错误 {errors_r}")
+check("旧名字回来了", (SANDBOX / "IMG_01.jpg").exists())
+
+# 11.3 查找替换模式
+rp2 = core.build_rename_plan(SANDBOX, ["IMG_01.jpg"], mode="replace",
+                             find="IMG", replace="武当山")
+check("查找替换规划正确",
+      rp2[0]["status"] == "OK" and rp2[0]["target"].endswith("武当山_01.jpg"),
+      str(rp2))
+
+# 11.4 边界：名字没变 → 跳过
+rp3 = core.build_rename_plan(SANDBOX, ["IMG_01.jpg"], mode="replace",
+                             find="不存在", replace="x")
+check("没匹配到查找内容 → 名字不变 → 跳过", rp3[0]["status"] == "SKIP")
+
+# 11.5 边界：新名字被已有文件占用 → 冲突，不覆盖
+(SANDBOX / "照片-001.jpg").write_text("x", encoding="utf-8")
+rp4 = core.build_rename_plan(SANDBOX, ["IMG_01.jpg", "IMG_02.jpg"],
+                             mode="serial", prefix="照片-")
+check("与已有文件重名 → 冲突；不重名的正常改名",
+      rp4[0]["status"] == "CONFLICT" and rp4[1]["status"] == "OK",
+      str([(a["file"], a["status"]) for a in rp4]))
+check("冲突时原文件未被碰", (SANDBOX / "IMG_01.jpg").exists())
+
+# 11.6 边界：文件名已不存在 → 跳过
+rp5 = core.build_rename_plan(SANDBOX, ["幽灵文件.txt"], mode="serial")
+check("文件不存在 → 跳过", rp5[0]["status"] == "SKIP")
+
 # ---------- 总结 ----------
 print("\n" + "=" * 60)
 print(f"测试结果：通过 {passed} 项，失败 {failed} 项")

@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 
 APP_NAME = "智能文件工作台"
-APP_VERSION = "0.1.4"
+APP_VERSION = "0.1.5"
 
 # 整理记录的存放目录（整理时会跳过这个目录，不会把它当作文件分类）
 LOG_DIR_NAME = "_工作台记录"
@@ -276,6 +276,71 @@ def build_plan(folder, rules: dict | None = None, mode: str = "type",
     return actions
 
 
+# ---------------- 批量重命名（v0.1.5） ----------------
+
+def build_rename_plan(folder, names: list[str], mode: str,
+                      prefix: str = "", find: str = "",
+                      replace: str = "", start: int = 1) -> list[dict]:
+    """为选中的文件生成改名计划（只规划，不执行）。
+
+    mode="serial"   加序号：新名字 = 前缀 + 三位序号 + 原扩展名
+                    例如 prefix="照片-" → 照片-001.jpg、照片-002.jpg
+    mode="replace"  查找替换：把文件名里的 find 文字替换成 replace
+                    例如 find="IMG" replace="武当山" → IMG_01.jpg 变 武当山_01.jpg
+
+    names 是文件夹第一层中要改名的文件名列表。
+    安全规则与整理一致：名字没变→跳过；新名字被占用→冲突不覆盖；
+    同一批内两个文件算出同一个新名字→后面的标记冲突。
+    """
+    folder = Path(folder)
+    existing = {p.name for p in folder.iterdir() if p.is_file()}
+    plan = []
+    used_new = set()
+
+    for i, name in enumerate(names, start=start):
+        src = folder / name
+        if not src.exists():
+            plan.append({"file": name,
+                         "action": "跳过（文件已不存在）", "status": "SKIP"})
+            continue
+
+        stem = src.stem
+        ext = src.suffix  # 含点，如 .jpg；没有扩展名则是空串
+
+        if mode == "serial":
+            new_name = f"{prefix}{i:03d}{ext}"
+        elif mode == "replace":
+            if not find:
+                plan.append({"file": name,
+                             "action": "跳过（查找内容为空）", "status": "SKIP"})
+                continue
+            new_name = stem.replace(find, replace) + ext
+        else:
+            raise ValueError(f"未知改名模式：{mode}")
+
+        if new_name == name:
+            plan.append({"file": name,
+                         "action": "跳过（新名字和原来一样）", "status": "SKIP"})
+            continue
+        if new_name in used_new:
+            plan.append({"file": name,
+                         "action": f"冲突：本批已有文件要改名为 {new_name}",
+                         "status": "CONFLICT"})
+            continue
+        if new_name in existing:
+            plan.append({"file": name,
+                         "action": f"冲突：文件夹里已有 {new_name}，不覆盖",
+                         "status": "CONFLICT"})
+            continue
+
+        used_new.add(new_name)
+        plan.append({"file": name,
+                     "action": f"改名为 {new_name}",
+                     "status": "OK",
+                     "target": str(folder / new_name)})
+    return plan
+
+
 # ---------------- 执行 ----------------
 
 def execute_plan(folder, plan: list[dict]) -> list[dict]:
@@ -321,7 +386,8 @@ def execute_plan(folder, plan: list[dict]) -> list[dict]:
         shutil.move(str(src), str(dst))
         records.append({
             "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "operation": "move",
+            # 同目录移动 = 改名；跨目录 = 移动。撤销两种都支持
+            "operation": "rename" if src.parent == dst.parent else "move",
             "from": str(src),
             "to": str(dst),
             # 记录"这个目录是本次整理才创建的"，撤销时用来清理空目录
@@ -362,21 +428,24 @@ def write_log(folder, records: list[dict], note: str = "") -> tuple[Path, Path]:
     )
     # TXT 报告：给人看的
     report = log_dir / f"report_{stamp}.txt"
-    moved = [r for r in records if r["operation"] == "move"]
-    skipped = [r for r in records if r["operation"] != "move"]
+    done = [r for r in records if r["operation"] in ("move", "rename")]
+    skipped = [r for r in records if r["operation"] not in ("move", "rename")]
     lines = [
-        f"{APP_NAME} v{APP_VERSION} 整理报告",
+        f"{APP_NAME} v{APP_VERSION} 操作报告",
         f"时间：{data['time']}",
         f"文件夹：{folder}",
-        f"结果：成功移动 {len(moved)} 个文件，跳过 {len(skipped)} 个",
+        f"结果：成功处理 {len(done)} 个文件，跳过 {len(skipped)} 个",
         "-" * 50,
     ]
-    for r in moved:
-        lines.append(f"[移动] {Path(r['from']).name}  →  {Path(r['to']).parent.name}/")
+    for r in done:
+        if r["operation"] == "rename":
+            lines.append(f"[改名] {Path(r['from']).name}  →  {Path(r['to']).name}")
+        else:
+            lines.append(f"[移动] {Path(r['from']).name}  →  {Path(r['to']).parent.name}/")
     for r in skipped:
         lines.append(f"[跳过] {Path(r['from']).name}（{r.get('note', '')}）")
     lines.append("")
-    lines.append(f"撤销方法：打开本软件，点「撤销上次整理」，选择 undo_{stamp}.json")
+    lines.append(f"撤销方法：打开本软件，点「④ 撤销上次」，选择 undo_{stamp}.json")
     report.write_text("\n".join(lines), encoding="utf-8")
 
     return log_file, report
@@ -396,7 +465,7 @@ def undo_from_log(log_file) -> tuple[int, list[str], list[str]]:
     errors = []
 
     for op in data["operations"]:
-        if op["operation"] != "move":
+        if op["operation"] not in ("move", "rename"):
             continue
         now_pos = Path(op["to"])     # 文件现在在哪
         old_pos = Path(op["from"])   # 原来在哪

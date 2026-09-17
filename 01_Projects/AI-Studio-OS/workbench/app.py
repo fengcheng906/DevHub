@@ -93,6 +93,9 @@ class WorkbenchApp:
         self.btn_undo.pack(side=tk.LEFT)
         self.btn_rules = ttk.Button(bottom, text="⑤ 规则管理", command=self.edit_rules)
         self.btn_rules.pack(side=tk.LEFT, padx=(16, 0))
+        self.btn_rename = ttk.Button(bottom, text="⑥ 批量重命名",
+                                     command=self.open_rename)
+        self.btn_rename.pack(side=tk.LEFT, padx=(6, 0))
 
         self.status_var = tk.StringVar(value="请先选择要整理的文件夹")
         ttk.Label(self.root, textvariable=self.status_var, padding=(10, 4),
@@ -245,6 +248,115 @@ class WorkbenchApp:
         ttk.Button(btns, text="恢复默认规则", command=on_default).pack(
             side=tk.RIGHT, padx=6)
         ttk.Button(btns, text="取消", command=win.destroy).pack(side=tk.RIGHT)
+
+    # ---------- 批量重命名（v0.1.5） ----------
+
+    def open_rename(self):
+        """⑥ 批量重命名：选文件 → 选方式 → 预览 → 确认执行。"""
+        if not self.folder:
+            messagebox.showinfo("请先选择文件夹", "先在主窗口点「① 选择文件夹」，再来改名。")
+            return
+        folder = Path(self.folder)
+
+        # 列出第一层里"可改名"的文件（不含记录目录和隐藏文件）
+        files = sorted(p.name for p in folder.iterdir()
+                       if p.is_file() and not p.name.startswith(".")
+                       and p.name != core.RULES_FILE.name)
+
+        win = tk.Toplevel(self.root)
+        win.title("批量重命名")
+        win.geometry("560x520")
+        win.transient(self.root)
+
+        ttk.Label(win, text=f"当前文件夹：{folder}（点「刷新」可重新加载文件列表）",
+                  padding=8, wraplength=540, justify=tk.LEFT).pack(anchor=tk.W)
+
+        # 左：可选文件列表（可多选）；右：预览结果
+        lists = ttk.Frame(win, padding=(8, 0))
+        lists.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(lists, text="要改名的文件（按住 Ctrl 点选多个）：").pack(anchor=tk.W)
+        src_list = tk.Listbox(lists, selectmode=tk.EXTENDED, height=8, exportselection=False)
+        src_list.pack(fill=tk.BOTH, expand=True)
+        for f in files:
+            src_list.insert(tk.END, f)
+
+        ttk.Label(lists, text="改名方式：", padding=(0, 8, 0, 0)).pack(anchor=tk.W)
+        opts = ttk.Frame(lists)
+        opts.pack(anchor=tk.W)
+        rmode = tk.StringVar(value="serial")
+        ttk.Radiobutton(opts, text="加序号", variable=rmode,
+                        value="serial").pack(side=tk.LEFT)
+        ttk.Radiobutton(opts, text="查找替换", variable=rmode,
+                        value="replace").pack(side=tk.LEFT, padx=(10, 0))
+
+        params = ttk.Frame(lists)
+        params.pack(anchor=tk.W, pady=4)
+        ttk.Label(params, text="前缀：").pack(side=tk.LEFT)
+        prefix_var = tk.StringVar(value="照片-")
+        ttk.Entry(params, textvariable=prefix_var, width=14).pack(side=tk.LEFT)
+        ttk.Label(params, text="   查找：").pack(side=tk.LEFT)
+        find_var = tk.StringVar()
+        ttk.Entry(params, textvariable=find_var, width=10).pack(side=tk.LEFT)
+        ttk.Label(params, text="→替换为：").pack(side=tk.LEFT)
+        replace_var = tk.StringVar()
+        ttk.Entry(params, textvariable=replace_var, width=10).pack(side=tk.LEFT)
+
+        preview = tk.Listbox(lists, height=8, exportselection=False)
+        preview.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+        state = {"plan": []}
+
+        def do_preview():
+            sel = [src_list.get(i) for i in src_list.curselection()]
+            if not sel:
+                messagebox.showinfo("没选文件", "先在上方列表里选中要改名的文件（可多选）。",
+                                    parent=win)
+                return
+            mode = rmode.get()
+            if mode == "serial":
+                state["plan"] = core.build_rename_plan(
+                    folder, sel, mode="serial", prefix=prefix_var.get())
+            else:
+                state["plan"] = core.build_rename_plan(
+                    folder, sel, mode="replace",
+                    find=find_var.get(), replace=replace_var.get())
+            preview.delete(0, tk.END)
+            for act in state["plan"]:
+                mark = {"OK": "→", "CONFLICT": "✕", "SKIP": "—"}[act["status"]]
+                preview.insert(tk.END, f"{act['file']}  {mark}  {act['action']}")
+            n_ok = sum(1 for a in state["plan"] if a["status"] == "OK")
+            btn_run.config(state=tk.NORMAL if n_ok else tk.DISABLED)
+
+        def do_run():
+            plan = state["plan"]
+            n_ok = sum(1 for a in plan if a["status"] == "OK")
+            if n_ok == 0:
+                return
+            answer = messagebox.askyesno(
+                "改名前确认",
+                f"即将把 {n_ok} 个文件改名（同目录内）。\n\n"
+                f"冲突和跳过的文件不会被碰。改完可以用主窗口「④ 撤销上次」恢复。\n\n确定执行吗？",
+                parent=win)
+            if not answer:
+                return
+            records = core.execute_plan(folder, plan)
+            done = [r for r in records if r["operation"] == "rename"]
+            _, report_file = core.write_log(folder, records, note="批量重命名")
+            self.btn_undo.config(state=tk.NORMAL)
+            messagebox.showinfo(
+                "改名完成",
+                f"成功改名 {len(done)} 个文件。\n\n报告：{report_file}\n\n"
+                f"如需恢复，回主窗口点「④ 撤销上次」。", parent=win)
+            win.destroy()
+            self.do_scan()
+
+        btns = ttk.Frame(lists, padding=(0, 8))
+        btns.pack(fill=tk.X)
+        ttk.Button(btns, text="预览改名", command=do_preview).pack(side=tk.LEFT)
+        btn_run = ttk.Button(btns, text="确认改名", command=do_run,
+                             state=tk.DISABLED)
+        btn_run.pack(side=tk.LEFT, padx=6)
+        ttk.Button(btns, text="关闭", command=win.destroy).pack(side=tk.RIGHT)
 
 
 def main():
