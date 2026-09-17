@@ -5,6 +5,12 @@
 # GUI 冒烟测试临时文件
 01_Projects/AI-Studio-OS/workbench/tests/gui_smoke/
 
+# 输出目录里的临时排查文件
+05_Output/*.txt
+
+# 待手动清理的旧版 exe（已移出桌面，暂不删）
+/workbench_old_v015.exe
+
 # 打包产物与临时文件
 01_Projects/AI-Studio-OS/dist/
 01_Projects/AI-Studio-OS/build/
