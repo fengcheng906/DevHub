@@ -21,7 +21,7 @@ import csv
 import os
 
 APP_NAME = "数据处理助手"
-APP_VERSION = "0.1.1"
+APP_VERSION = "0.2.0"
 
 # 依次尝试的编码：Excel 导出的中文 CSV 常见 utf-8-sig 和 gbk 两种
 ENCODINGS = ("utf-8-sig", "utf-8", "gbk", "gb18030")
@@ -207,6 +207,156 @@ def summary_text(stats: list) -> str:
             line += f"；数字列，最小 {s['min']}，最大 {s['max']}，平均 {round(s['mean'], 2)}"
         lines.append(line)
     return "\n".join(lines)
+
+
+# ---------------- 筛选（v0.2.0 新增） ----------------
+
+# 支持的条件（界面下拉框和这里一一对应）
+FILTER_OPS = (
+    ("eq", "等于"),
+    ("ne", "不等于"),
+    ("contains", "包含"),
+    ("not_contains", "不包含"),
+    ("gt", "大于"),
+    ("ge", "大于等于"),
+    ("lt", "小于"),
+    ("le", "小于等于"),
+    ("empty", "为空"),
+    ("not_empty", "不为空"),
+)
+
+
+def filter_rows(headers: list, rows: list, col_idx: int,
+                op: str, value: str = "") -> tuple[list, list]:
+    """按条件筛出匹配的行，返回新数据，不改原件。
+
+    col_idx：看哪一列（从 0 开始数）。
+    op：条件，见 FILTER_OPS（"eq"=等于、"contains"=包含、"gt"=大于……）。
+    value：比较用的值；选"为空/不为空"时这个值用不到。
+
+    大小比较只对数字有效：这一格不是数字的行会被排除，不会算错。
+    """
+    if op not in {code for code, _ in FILTER_OPS}:
+        raise ValueError(f"不认识的条件：{op}")
+
+    def cell(r):
+        return (r[col_idx] if col_idx < len(r) else "").strip()
+
+    def match(r):
+        c = cell(r)
+        if op == "empty":
+            return c == ""
+        if op == "not_empty":
+            return c != ""
+        if op == "eq":
+            return c == value.strip()
+        if op == "ne":
+            return c != value.strip()
+        if op == "contains":
+            return value.strip() in c
+        if op == "not_contains":
+            return value.strip() not in c
+        # 以下四种是数字比较：格子不是数字就不匹配
+        if not _is_number(c):
+            return False
+        target = value.strip().replace(",", "")
+        if not _is_number(target):
+            raise ValueError(f"「{value}」不是数字，无法做大小比较")
+        a, b = float(c.replace(",", "")), float(target)
+        return {"gt": a > b, "ge": a >= b, "lt": a < b, "le": a <= b}[op]
+
+    return headers, [r for r in rows if match(r)]
+
+
+# ---------------- 排序（v0.2.0 新增） ----------------
+
+def sort_rows(headers: list, rows: list, col_idx: int,
+              numeric: bool = False, reverse: bool = False) -> tuple[list, list]:
+    """按某一列排序，返回新数据，不改原件。
+
+    numeric=True：按数字大小排（数字以外的格子排在最后）。
+    numeric=False：按文字顺序排（1, 10, 2 这种"自然顺序"，不是 1, 2, 10）。
+    """
+    import re
+
+    def natural_key(s: str):
+        # 把 "第3组" 拆成 ["第", 3, "组"]，数字段按数值比，排序更聪明
+        parts = re.split(r"(\d+)", s)
+        return tuple(int(p) if p.isdigit() else p for p in parts)
+
+    def cell(r):
+        return (r[col_idx] if col_idx < len(r) else "").strip()
+
+    if numeric:
+        # 数字行和非数字行（含空白）分开处理：
+        # 数字按大小排，升降序都听指挥；非数字行一律垫底，保持原有顺序
+        nums, others = [], []
+        for r in rows:
+            c = cell(r)
+            if _is_number(c):
+                nums.append((float(c.replace(",", "")), r))
+            else:
+                others.append(r)
+        nums.sort(key=lambda t: t[0], reverse=reverse)
+        return headers, [r for _, r in nums] + others
+
+    def key(r):
+        c = cell(r)
+        return (c == "", natural_key(c))  # 空白排最后
+
+    return headers, sorted(rows, key=key, reverse=reverse)
+
+
+# ---------------- 图表数据（v0.2.0 新增） ----------------
+
+def chart_series(headers: list, rows: list, col_idx: int,
+                 top_n: int = 10) -> dict:
+    """为柱状图准备数据：数出这一列里每个值各出现了多少次。
+
+    数字列（比如成绩）会自动分成若干段（如 0-59、60-69……），段数最多 10 段；
+    文字列则取出现次数最多的前 10 个值。
+    返回 {"title": 图表标题, "is_numeric": 是否数字列, "items": [(标签, 次数), ...]}
+    """
+    col = [(r[col_idx] if col_idx < len(r) else "").strip() for r in rows]
+    values = [c for c in col if c]
+    name = (headers[col_idx] if col_idx < len(headers) else "").strip() or f"第{col_idx + 1}列"
+
+    if not values:
+        return {"title": f"「{name}」暂无数据", "is_numeric": False, "items": []}
+
+    numeric = all(_is_number(v) for v in values)
+    if not numeric:
+        counts: dict[str, int] = {}
+        for v in values:
+            counts[v] = counts.get(v, 0) + 1
+        top = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:top_n]
+        return {"title": f"「{name}」各值出现次数（前 {len(top)} 名）",
+                "is_numeric": False, "items": top}
+
+    nums = [float(v.replace(",", "")) for v in values]
+    lo, hi = min(nums), max(nums)
+    if lo == hi:
+        label = _fmt_num(lo)
+        return {"title": f"「{name}」全部等于 {label}",
+                "is_numeric": True, "items": [(label, len(nums))]}
+
+    # 数字列：自动分 10 段以内，统计每段有几个数
+    span = hi - lo
+    step = span / 10
+    bounds = [lo + step * i for i in range(11)]
+    counts = [0] * 10
+    for n in nums:
+        idx = min(int((n - lo) / step), 9)  # 最大那个数正好落在最后一段
+        counts[idx] += 1
+    items = []
+    for i in range(10):
+        if counts[i] == 0:
+            continue  # 空段不画，图更清爽
+        a, b = bounds[i], bounds[i + 1]
+        label = f"{_fmt_num(round(a, 2))}~{_fmt_num(round(b, 2))}"
+        items.append((label, counts[i]))
+    return {"title": f"「{name}」数值分布（共 {len(nums)} 个数）",
+            "is_numeric": True, "items": items}
 
 
 # ---------------- 导出 ----------------

@@ -230,11 +230,102 @@ def test_export():
     check("导出：原始文件绝不被修改", before == after)
 
 
+def test_filter_sort_chart():
+    print("筛选 / 排序 / 图表数据（v0.2.0 新增）：")
+
+    headers = ["姓名", "班级", "成绩"]
+    rows = [
+        ["张三", "1班", "90"],
+        ["李四", "2班", "55"],
+        ["王五", "1班", ""],
+        ["赵六", "2班", "77"],
+        ["孙七", "1班", "90"],
+    ]
+
+    # 22. 等于
+    _, r = core.filter_rows(headers, rows, 1, "eq", "1班")
+    check("筛选：等于 1班 剩 3 行", len(r) == 3, f"实际={len(r)}")
+
+    # 23. 包含
+    _, r = core.filter_rows(headers, rows, 0, "contains", "张")
+    check("筛选：姓名包含「张」剩 1 行", len(r) == 1 and r[0][0] == "张三")
+
+    # 24. 大于（只认数字，空白格被排除）
+    _, r = core.filter_rows(headers, rows, 2, "gt", "60")
+    check("筛选：成绩大于 60 剩 3 行（空白不算）", len(r) == 3, f"实际={len(r)}")
+
+    # 25. 大小比较遇到非数字的比较值会明确报错
+    try:
+        core.filter_rows(headers, rows, 2, "gt", "abc")
+        check("筛选：比较值不是数字时抛错", False, "没有抛错")
+    except ValueError:
+        check("筛选：比较值不是数字时抛错", True)
+
+    # 26. 为空 / 不为空
+    _, r = core.filter_rows(headers, rows, 2, "empty")
+    check("筛选：成绩为空剩 1 行", len(r) == 1)
+    _, r = core.filter_rows(headers, rows, 2, "not_empty")
+    check("筛选：成绩不为空剩 4 行", len(r) == 4)
+
+    # 27. 不认识的条件会报错
+    try:
+        core.filter_rows(headers, rows, 0, "haha", "x")
+        check("筛选：非法条件抛错", False, "没有抛错")
+    except ValueError:
+        check("筛选：非法条件抛错", True)
+
+    # 28. 筛选不改原始数据
+    core.filter_rows(headers, rows, 1, "eq", "1班")
+    check("筛选：原始数据未被改动", len(rows) == 5)
+
+    # 29. 数字排序：小的在前，空白排最后
+    _, r = core.sort_rows(headers, rows, 2, numeric=True)
+    check("排序：数字升序最后一个是空白", r[-1][2] == "", f"实际={r[-1]}")
+    check("排序：数字升序第一个是 55", r[0][2] == "55")
+
+    # 30. 数字降序
+    _, r = core.sort_rows(headers, rows, 2, numeric=True, reverse=True)
+    check("排序：数字降序第一个是 90", r[0][2] == "90")
+
+    # 31. 文字排序：自然顺序（第2组 在 第10组 前）
+    h2 = ["组名"]
+    r2 = [["第10组"], ["第2组"], ["第1组"]]
+    _, rs = core.sort_rows(h2, r2, 0)
+    check("排序：文字自然顺序 1→2→10", [x[0] for x in rs] == ["第1组", "第2组", "第10组"],
+          f"实际={[x[0] for x in rs]}")
+
+    # 32. 文字排序不改原始数据
+    check("排序：原始数据未被改动", [x[0] for x in r2] == ["第10组", "第2组", "第1组"])
+
+    # 33. 图表数据：文字列数出现次数
+    s = core.chart_series(headers, rows, 1)
+    items = dict(s["items"])
+    check("图表：文字列 1班 出现 3 次", items.get("1班") == 3, f"实际={items}")
+
+    # 34. 图表数据：数字列自动分段且总数对得上
+    s = core.chart_series(headers, rows, 2)
+    total = sum(n for _, n in s["items"])
+    check("图表：数字列各段次数加起来=有效数字个数", total == 4, f"实际={total}")
+    check("图表：数字列标记为数字列", s["is_numeric"] is True)
+
+    # 35. 图表数据：空列不崩溃
+    s = core.chart_series(headers, [], 0)
+    check("图表：没有数据时返回空项目", s["items"] == [])
+
+    # 36. 连续组合：清洗 → 筛选 → 排序，链条结果正确
+    hh, rr = core.clean_table(headers, rows, {})
+    hh, rr = core.filter_rows(hh, rr, 2, "not_empty")
+    hh, rr = core.sort_rows(hh, rr, 2, numeric=True, reverse=True)
+    check("组合：先筛非空再降序，成绩依次 90/90/77/55",
+          [x[2] for x in rr] == ["90", "90", "77", "55"], f"实际={[x[2] for x in rr]}")
+
+
 def main():
     test_read()
     test_clean()
     test_summary()
     test_export()
+    test_filter_sort_chart()
     print()
     print(f"共 {passed + failed} 项，通过 {passed} 项，失败 {failed} 项")
     if failed == 0:

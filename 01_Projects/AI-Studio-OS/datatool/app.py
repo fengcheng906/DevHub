@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-数据处理助手 v0.1.1 —— 图形界面（精修版）
+数据处理助手 v0.2.0 —— 图形界面
 项目：AI 个人工作室操作系统（AI Personal Studio OS）
 
 怎么打开这个软件：
@@ -8,8 +8,10 @@
 
 使用顺序：
     ① 选择 CSV 文件 → 勾选清洗选项 → ② 预览清洗结果
-    → ③ 统计信息 / ④ 导出结果（导出的是新文件，原文件绝不被修改）
+    → 筛选 / 排序 / 画图 → ③ 统计信息 / ④ 导出结果
+    （导出的是新文件，原文件绝不被修改）
 
+v0.2.0 新增：按条件筛选行、按列排序、柱状图。
 v0.1.1 界面精修：高分屏适配（文字不发虚）、现代配色、卡片式布局。
 """
 
@@ -74,8 +76,8 @@ class DataToolApp:
         self.encoding = ""
 
         root.title(f"{core.APP_NAME} v{core.APP_VERSION}")
-        root.geometry("960x680")
-        root.minsize(860, 600)
+        root.geometry("980x780")
+        root.minsize(900, 700)
         root.configure(bg=BG)
 
         self._build_ui()
@@ -216,6 +218,71 @@ class DataToolApp:
         tk.Label(row2, text="（留空 = 不填）", bg=CARD, fg=SUBTEXT,
                  font=_font(9)).pack(side=tk.LEFT, padx=4)
 
+        # ===== 筛选与排序卡片（v0.2.0 新增） =====
+        fs_card = tk.Frame(self.root, bg=CARD,
+                           highlightbackground=BORDER, highlightthickness=1)
+        fs_card.pack(fill=tk.X, padx=20, pady=(10, 0))
+
+        tk.Label(fs_card, text="筛选与排序", bg=CARD, fg=SUBTEXT,
+                 font=_font(9, True)).pack(anchor=tk.W, padx=14, pady=(10, 2))
+
+        frow = tk.Frame(fs_card, bg=CARD)
+        frow.pack(fill=tk.X, padx=10)
+        srow = tk.Frame(fs_card, bg=CARD)
+        srow.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+        def _combo_style():
+            return {
+                "background": "#f6f8fc", "foreground": TEXT,
+                "font": _font(10), "state": "readonly",
+            }
+
+        # —— 筛选一行：选列 + 选条件 + 填值 + 按钮 ——
+        tk.Label(frow, text="筛选：", bg=CARD, fg=TEXT,
+                 font=_font(10, True)).pack(side=tk.LEFT, padx=(4, 2))
+        self.filter_col_var = tk.StringVar()
+        self.filter_col = ttk.Combobox(frow, textvariable=self.filter_col_var,
+                                       width=10, **_combo_style())
+        self.filter_col.pack(side=tk.LEFT, padx=4)
+
+        self.filter_op_var = tk.StringVar(value="包含")
+        self.filter_op = ttk.Combobox(
+            frow, textvariable=self.filter_op_var, width=9,
+            values=[label for _, label in core.FILTER_OPS], **_combo_style())
+        self.filter_op.pack(side=tk.LEFT, padx=4)
+
+        self.filter_val_var = tk.StringVar()
+        tk.Entry(frow, textvariable=self.filter_val_var, width=12,
+                 bg="#f6f8fc", fg=TEXT, relief="flat", font=_font(10),
+                 highlightthickness=1, highlightcolor=ACCENT,
+                 highlightbackground=BORDER).pack(side=tk.LEFT, padx=4, ipady=3)
+
+        btn_filter = tk.Button(frow, text="⑤ 筛选", command=self.apply_filter)
+        _style_button(btn_filter, ACCENT, "#ffffff", ACCENT_HOVER)
+        btn_filter.pack(side=tk.LEFT, padx=(8, 4))
+        btn_unfilter = tk.Button(frow, text="清除筛选/排序",
+                                 command=self.clear_filter)
+        _style_button(btn_unfilter, "#e2e6ef", SUBTEXT, "#d2d8e5", bold=False)
+        btn_unfilter.pack(side=tk.LEFT, padx=4)
+
+        # —— 排序一行：选列 + 升序/降序 ——
+        tk.Label(srow, text="排序：", bg=CARD, fg=TEXT,
+                 font=_font(10, True)).pack(side=tk.LEFT, padx=(4, 2))
+        self.sort_col_var = tk.StringVar()
+        self.sort_col = ttk.Combobox(srow, textvariable=self.sort_col_var,
+                                     width=10, **_combo_style())
+        self.sort_col.pack(side=tk.LEFT, padx=4)
+
+        btn_up = tk.Button(srow, text="升序 ↑", command=lambda: self.apply_sort(False))
+        _style_button(btn_up, ACCENT_SOFT, ACCENT, "#d3e0fa")
+        btn_up.pack(side=tk.LEFT, padx=(8, 4))
+        btn_down = tk.Button(srow, text="降序 ↓", command=lambda: self.apply_sort(True))
+        _style_button(btn_down, ACCENT_SOFT, ACCENT, "#d3e0fa")
+        btn_down.pack(side=tk.LEFT, padx=4)
+
+        tk.Label(srow, text="提示：数字列自动按大小排，文字列按拼音顺序排",
+                 bg=CARD, fg=SUBTEXT, font=_font(9)).pack(side=tk.LEFT, padx=10)
+
         # ===== 底部操作按钮 =====
         bottom = tk.Frame(self.root, bg=BG)
         bottom.pack(fill=tk.X, padx=20, pady=12)
@@ -228,6 +295,10 @@ class DataToolApp:
         btn_stats = tk.Button(bottom, text="③ 统计信息", command=self.show_stats)
         _style_button(btn_stats, ACCENT_SOFT, ACCENT, "#d3e0fa")
         btn_stats.pack(side=tk.LEFT, padx=(0, 8))
+
+        btn_chart = tk.Button(bottom, text="⑤ 画柱状图", command=self.show_chart)
+        _style_button(btn_chart, ACCENT_SOFT, ACCENT, "#d3e0fa")
+        btn_chart.pack(side=tk.LEFT, padx=(0, 8))
 
         btn_export = tk.Button(bottom, text="④ 导出结果", command=self.export_result)
         _style_button(btn_export, ACCENT, "#ffffff", ACCENT_HOVER)
@@ -246,9 +317,26 @@ class DataToolApp:
 
     # ---------- 数据展示 ----------
 
+    def _sync_column_combos(self):
+        """让筛选/排序/图表的"选列"下拉框跟上当前数据的列。"""
+        values = list(self.cur_headers)
+        for combo, var in ((self.filter_col, self.filter_col_var),
+                           (self.sort_col, self.sort_col_var)):
+            combo.configure(values=values)
+            if var.get() not in values:
+                var.set(values[0] if values else "")
+
+    def _find_col(self, name: str) -> int:
+        """按列名找出列的位置（找不到就报错提示）。"""
+        try:
+            return list(self.cur_headers).index(name)
+        except ValueError:
+            raise ValueError(f"找不到列「{name}」，请先选择文件")
+
     def _refresh_preview(self):
         """把当前数据填进表格（只显示前若干行，列数多的表也能扛住）。"""
         self.tree.delete(*self.tree.get_children())
+        self._sync_column_combos()
         if not self.cur_headers:
             return
         cols = [f"c{i}" for i in range(len(self.cur_headers))]
@@ -314,6 +402,133 @@ class DataToolApp:
         self.status_var.set(
             self.status_var.get()
             + f"｜清洗：{before} 行 → {len(self.cur_rows)} 行")
+
+    def apply_filter(self):
+        """按选好的列和条件筛出匹配的行。"""
+        if not self._need_file() or not self.cur_headers:
+            return
+        col_name = self.filter_col_var.get()
+        op_label = self.filter_op_var.get()
+        value = self.filter_val_var.get()
+        ops = {label: code for code, label in core.FILTER_OPS}
+        if op_label not in ops:
+            messagebox.showwarning("条件不对", "请在下拉框里选一个筛选条件")
+            return
+        op = ops[op_label]
+        if op not in ("empty", "not_empty") and value.strip() == "":
+            messagebox.showwarning("还缺一个值",
+                                   "这个条件需要填一个要比较的内容")
+            return
+        try:
+            idx = self._find_col(col_name)
+            before = len(self.cur_rows)
+            self.cur_headers, self.cur_rows = core.filter_rows(
+                self.cur_headers, self.cur_rows, idx, op, value)
+        except Exception as e:
+            messagebox.showerror("筛选失败", str(e))
+            return
+        self._refresh_preview()
+        self.status_var.set(
+            self.status_var.get()
+            + f"｜筛选「{col_name} {op_label} {value.strip()}」："
+              f"{before} 行 → {len(self.cur_rows)} 行")
+
+    def clear_filter(self):
+        """撤掉筛选和排序：回到原始数据（若已清洗则回到清洗结果）。"""
+        if not self._need_file():
+            return
+        if self.cleaned:
+            self.cur_headers, self.cur_rows = core.clean_table(
+                self.headers, self.rows, self._get_options())
+        else:
+            self.cur_headers, self.cur_rows = self.headers, self.rows
+        self._refresh_preview()
+
+    def apply_sort(self, reverse: bool):
+        """按选好的列排序。"""
+        if not self._need_file() or not self.cur_headers:
+            return
+        col_name = self.sort_col_var.get()
+        try:
+            idx = self._find_col(col_name)
+            numeric = all(core._is_number(
+                (r[idx] if idx < len(r) else "").strip())
+                for r in self.cur_rows
+                if (r[idx] if idx < len(r) else "").strip())
+            self.cur_headers, self.cur_rows = core.sort_rows(
+                self.cur_headers, self.cur_rows, idx,
+                numeric=numeric, reverse=reverse)
+        except Exception as e:
+            messagebox.showerror("排序失败", str(e))
+            return
+        self._refresh_preview()
+        way = "降序" if reverse else "升序"
+        self.status_var.set(self.status_var.get()
+                            + f"｜已按「{col_name}」{way}排列")
+
+    def show_chart(self):
+        """按"筛选"那行选的列，画一张柱状图（弹新窗口）。"""
+        if not self._need_file() or not self.cur_headers:
+            return
+        col_name = self.filter_col_var.get()
+        try:
+            idx = self._find_col(col_name)
+            series = core.chart_series(self.cur_headers, self.cur_rows, idx)
+        except Exception as e:
+            messagebox.showerror("画图失败", str(e))
+            return
+        self._open_chart_window(series)
+
+    def _open_chart_window(self, series: dict):
+        """画柱状图：底边、柱子、次数标签、柱名标签，全部手绘。"""
+        win = tk.Toplevel(self.root)
+        win.title(series["title"])
+        win.configure(bg=CARD)
+        win.geometry("760x480")
+        win.minsize(640, 420)
+
+        tk.Label(win, text=series["title"], bg=CARD, fg=TEXT,
+                 font=_font(13, True)).pack(pady=(16, 4))
+        items = series["items"]
+        if not items:
+            tk.Label(win, text="这一列暂时没有可画的数据", bg=CARD, fg=SUBTEXT,
+                     font=_font(11)).pack(pady=30)
+            return
+
+        canvas = tk.Canvas(win, bg=CARD, highlightthickness=0)
+        canvas.pack(fill=tk.BOTH, expand=True, padx=20, pady=(4, 16))
+
+        def draw(_event=None):
+            canvas.delete("all")
+            w = max(canvas.winfo_width(), 640)
+            h = max(canvas.winfo_height(), 360)
+            left, right, top, bottom = 60, w - 30, 20, h - 60
+            max_n = max(n for _, n in items) if items else 1
+
+            # 底边和左边（坐标轴）
+            canvas.create_line(left, top, left, bottom, fill=BORDER, width=2)
+            canvas.create_line(left, bottom, right, bottom, fill=BORDER, width=2)
+
+            n = len(items)
+            slot = (right - left) / n
+            bar_w = min(slot * 0.55, 90)
+            for i, (label, count) in enumerate(items):
+                cx = left + slot * (i + 0.5)
+                x1, x2 = cx - bar_w / 2, cx + bar_w / 2
+                y1 = bottom - (bottom - top) * (count / max_n)
+                color = ACCENT if i % 2 == 0 else "#6f9bf0"  # 深浅蓝交替，更耐看
+                canvas.create_rectangle(x1, y1, x2, bottom,
+                                        fill=color, outline="")
+                canvas.create_text(cx, y1 - 12, text=str(count),
+                                   fill=TEXT, font=_font(10, True))
+                # 柱名太长就截断，免得挤成一团
+                shown = label if len(label) <= 8 else label[:7] + "…"
+                canvas.create_text(cx, bottom + 16, text=shown,
+                                   fill=SUBTEXT, font=_font(9))
+
+        canvas.bind("<Configure>", draw)  # 窗口大小一变就重画，图始终端正
+        win.update_idletasks()
+        draw()
 
     def show_stats(self):
         if not self._need_file():

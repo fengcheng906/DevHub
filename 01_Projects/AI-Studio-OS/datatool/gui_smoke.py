@@ -69,6 +69,39 @@ check("界面：导出内容可读回", r2[0][0] == "张三", f"实际={r2}")
 stats = core.summary(win.cur_headers, win.cur_rows)
 check("界面：统计功能可运行", len(stats) == 3)
 
+# 5. 筛选：列下拉框已同步，直接选条件执行
+check("界面：筛选列下拉框已同步", "姓名" in win.filter_col.cget("values"))
+win.filter_col_var.set("姓名")
+win.filter_op_var.set("包含")
+win.filter_val_var.set("李")
+win.apply_filter()
+check("界面：筛选「姓名包含李」剩 1 行", len(win.cur_rows) == 1,
+      f"实际={len(win.cur_rows)}")
+
+# 6. 排序：数字列降序（当前只有一行数据，先恢复再测）
+win.clear_filter()
+win.sort_col_var.set("成绩")
+win.apply_sort(reverse=True)
+check("界面：按成绩降序后第一是 90", win.cur_rows[0][1] == "90",
+      f"实际={win.cur_rows[0]}")
+
+# 7. 清除筛选/排序后行数复原
+win.clear_filter()
+check("界面：清除后回到清洗结果 2 行", len(win.cur_rows) == 2,
+      f"实际={len(win.cur_rows)}")
+
+# 8. 图表数据 + 图表窗口能创建（不开新窗口画，只验数据）
+series = core.chart_series(win.cur_headers, win.cur_rows, 1)
+check("界面：图表数据非空", len(series["items"]) >= 1)
+win._open_chart_window(series)
+check("界面：图表窗口可创建", True)
+
+# 9. 没选文件时筛选会被拦下
+win.file_path = None
+before_rows = len(win.cur_rows)
+win.apply_filter()
+check("界面：未选文件时筛选被拦截", len(win.cur_rows) == before_rows)
+
 root.destroy()
 import shutil
 shutil.rmtree(tmp, ignore_errors=True)
