@@ -19,3 +19,6 @@
 01_Projects/AI-Studio-OS/datatool/dist/
 01_Projects/AI-Studio-OS/datatool/*.spec
 01_Projects/AI-Studio-OS/datatool/tests/sandbox/
+01_Projects/AI-Studio-OS/workbench/build/
+01_Projects/AI-Studio-OS/workbench/dist/
+01_Projects/AI-Studio-OS/workbench/*.spec

@@ -1,14 +1,27 @@
 # -*- coding: utf-8 -*-
 """
-智能文件工作台 v0.1 —— 图形界面
+智能文件工作台 v0.1.7 —— 图形界面（精修版）
 项目：AI 个人工作室操作系统（AI Personal Studio OS）
 
 怎么打开这个软件：
     双击本文件，或在命令行里运行：python app.py
 
-界面共 4 个按钮，从左到右按顺序用就行：
-    ① 选择文件夹  ② 扫描预览  ③ 执行整理  ④ 撤销上次
+界面按钮从左到右按顺序用就行：
+    ① 选择文件夹 ② 扫描预览 ③ 执行整理 ④ 撤销上次 ⑤ 规则管理 ⑥ 批量重命名
+
+v0.1.7 界面精修：高分屏适配（文字不发虚）、现代配色、卡片式布局，功能零改动。
 """
+
+import ctypes
+
+# 高分屏适配：必须在创建窗口之前调用，否则整窗文字发虚
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+except Exception:
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -23,6 +36,45 @@ try:
 except ImportError:
     HAS_DND = False
 
+# ---------------- 配色（与数据处理助手同一套高级感配色） ----------------
+BG = "#eef1f7"          # 窗口底色：浅灰蓝
+CARD = "#ffffff"        # 卡片底色：纯白
+BORDER = "#dde3ee"      # 卡片描边
+TEXT = "#1f2430"        # 正文：深灰黑
+SUBTEXT = "#7a8499"     # 次要文字：灰
+ACCENT = "#356ae6"      # 主色：沉静的蓝
+ACCENT_HOVER = "#2456c4"
+ACCENT_SOFT = "#e3ecfd"  # 主色的浅色底（次按钮、选中行用）
+OK_GREEN = "#16a34a"    # 绿：将移动
+WARN_ORANGE = "#d97706"  # 橙：同名冲突
+SKIP_GRAY = "#9aa3b5"   # 灰：跳过
+
+
+def _font(size=10, bold=False):
+    """统一字体：微软雅黑，大小可调。"""
+    return ("Microsoft YaHei UI", size, "bold" if bold else "normal")
+
+
+def _style_button(btn, bg, fg, hover_bg, bold=True):
+    """把按钮做成扁平精致样式，并带鼠标悬停变色（禁用时不变色）。"""
+    btn.configure(
+        bg=bg, fg=fg,
+        activebackground=hover_bg, activeforeground=fg,
+        relief="flat", bd=0, cursor="hand2",
+        padx=14, pady=7, font=_font(10, bold),
+        disabledforeground="#aab2c5",
+    )
+
+    def _on_enter(e):
+        if str(btn["state"]) != "disabled":
+            btn.configure(bg=hover_bg)
+
+    def _on_leave(e):
+        btn.configure(bg=bg)
+
+    btn.bind("<Enter>", _on_enter)
+    btn.bind("<Leave>", _on_leave)
+
 
 class WorkbenchApp:
     def __init__(self, root: tk.Tk):
@@ -31,84 +83,184 @@ class WorkbenchApp:
         self.plan = []          # 最近一次生成的整理计划
 
         root.title(f"{core.APP_NAME} v{core.APP_VERSION}")
-        root.geometry("880x560")
-        root.minsize(760, 480)
+        root.geometry("980x660")
+        root.minsize(860, 560)
+        root.configure(bg=BG)
 
         self._build_ui()
 
     # ---------- 界面搭建 ----------
 
     def _build_ui(self):
-        # 顶部：文件夹选择
-        top = ttk.Frame(self.root, padding=10)
-        top.pack(fill=tk.X)
+        # clam 主题：唯一能自定义所有颜色的主题
+        style = ttk.Style(self.root)
+        style.theme_use("clam")
 
-        ttk.Label(top, text="目标文件夹：").pack(side=tk.LEFT)
+        # 表格样式：去边框、加行高、选中行用浅蓝
+        style.configure(
+            "Treeview",
+            background=CARD, fieldbackground=CARD, foreground=TEXT,
+            rowheight=32, font=_font(10), borderwidth=0,
+        )
+        style.configure(
+            "Treeview.Heading",
+            background="#f3f5fa", foreground=TEXT,
+            font=_font(10, True), padding=(10, 9), relief="flat",
+        )
+        style.map(
+            "Treeview",
+            background=[("selected", ACCENT_SOFT)],
+            foreground=[("selected", TEXT)],
+        )
+        style.map(
+            "Treeview.Heading",
+            background=[("active", "#e8ecf5")],
+        )
+
+        # 单选框 / 勾选框样式
+        style.configure(
+            "TCheckbutton",
+            background=CARD, foreground=TEXT, font=_font(10),
+        )
+        style.configure(
+            "TRadiobutton",
+            background=CARD, foreground=TEXT, font=_font(10),
+        )
+
+        # 滚动条样式
+        style.configure(
+            "Vertical.TScrollbar",
+            background="#e6eaf3", troughcolor=CARD,
+            borderwidth=0, arrowcolor=SUBTEXT, relief="flat",
+        )
+
+        # ===== 顶部标题区 =====
+        header = tk.Frame(self.root, bg=BG)
+        header.pack(fill=tk.X, padx=20, pady=(16, 4))
+        tk.Label(header, text=core.APP_NAME, bg=BG, fg=TEXT,
+                 font=_font(17, True)).pack(side=tk.LEFT)
+        tk.Label(header, text=f"  v{core.APP_VERSION}", bg=BG, fg=SUBTEXT,
+                 font=_font(10)).pack(side=tk.LEFT, pady=(6, 0))
+        tk.Label(header, text="把文件夹收拾得井井有条",
+                 bg=BG, fg=SUBTEXT, font=_font(10)).pack(side=tk.RIGHT, pady=(8, 0))
+
+        # ===== 文件夹选择卡片 =====
+        folder_card = tk.Frame(self.root, bg=CARD,
+                               highlightbackground=BORDER, highlightthickness=1)
+        folder_card.pack(fill=tk.X, padx=20, pady=10)
+
+        tk.Label(folder_card, text="目标文件夹", bg=CARD, fg=SUBTEXT,
+                 font=_font(9, True)).pack(side=tk.LEFT, padx=(14, 6), pady=10)
+
         self.folder_var = tk.StringVar(value="（还没有选择文件夹）")
-        ttk.Entry(top, textvariable=self.folder_var, state="readonly").pack(
-            side=tk.LEFT, fill=tk.X, expand=True, padx=6)
-        ttk.Button(top, text="① 选择文件夹", command=self.choose_folder).pack(side=tk.LEFT)
+        folder_entry = tk.Entry(
+            folder_card, textvariable=self.folder_var,
+            bg="#f6f8fc", fg=TEXT, readonlybackground="#f6f8fc",
+            relief="flat", font=_font(10),
+            highlightthickness=1, highlightcolor=ACCENT, highlightbackground=BORDER,
+        )
+        folder_entry.pack(side=tk.LEFT, fill=tk.X, expand=True,
+                          padx=(0, 10), ipady=5)
 
-        # 中部：预览表格
-        mid = ttk.Frame(self.root, padding=(10, 0))
-        mid.pack(fill=tk.BOTH, expand=True)
+        btn_choose = tk.Button(folder_card, text="① 选择文件夹",
+                               command=self.choose_folder)
+        _style_button(btn_choose, ACCENT, "#ffffff", ACCENT_HOVER)
+        btn_choose.pack(side=tk.RIGHT, padx=(0, 12), pady=8)
+
+        # ===== 预览区（标题 + 表格） =====
+        mid = tk.Frame(self.root, bg=BG)
+        mid.pack(fill=tk.BOTH, expand=True, padx=20)
+
+        tk.Label(mid, text="整理预览", bg=BG, fg=SUBTEXT,
+                 font=_font(9, True)).pack(anchor=tk.W, pady=(2, 4))
+
+        table_card = tk.Frame(mid, bg=CARD,
+                              highlightbackground=BORDER, highlightthickness=1)
+        table_card.pack(fill=tk.BOTH, expand=True)
 
         columns = ("file", "type", "action", "status")
-        self.tree = ttk.Treeview(mid, columns=columns, show="headings", height=18)
+        self.tree = ttk.Treeview(table_card, columns=columns, show="headings")
         self.tree.heading("file", text="文件名")
         self.tree.heading("type", text="类型")
         self.tree.heading("action", text="整理动作（预览）")
         self.tree.heading("status", text="状态")
-        self.tree.column("file", width=230)
+        self.tree.column("file", width=250)
         self.tree.column("type", width=90, anchor=tk.CENTER)
-        self.tree.column("action", width=330)
-        self.tree.column("status", width=110, anchor=tk.CENTER)
+        self.tree.column("action", width=340)
+        self.tree.column("status", width=120, anchor=tk.CENTER)
 
-        scrollbar = ttk.Scrollbar(mid, orient=tk.VERTICAL, command=self.tree.yview)
+        # 不同状态用不同颜色区分
+        self.tree.tag_configure("ok", foreground=OK_GREEN)         # 绿：将移动
+        self.tree.tag_configure("conflict", foreground=WARN_ORANGE)  # 橙：冲突
+        self.tree.tag_configure("skip", foreground=SKIP_GRAY)      # 灰：跳过
+
+        scrollbar = ttk.Scrollbar(table_card, orient=tk.VERTICAL,
+                                  command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # 不同状态用不同颜色区分
-        self.tree.tag_configure("ok", foreground="#0a7d32")        # 绿：将移动
-        self.tree.tag_configure("conflict", foreground="#c26600")  # 橙：冲突
-        self.tree.tag_configure("skip", foreground="#888888")     # 灰：跳过
+        # ===== 整理方式 + 操作按钮卡片 =====
+        bottom_card = tk.Frame(self.root, bg=CARD,
+                               highlightbackground=BORDER, highlightthickness=1)
+        bottom_card.pack(fill=tk.X, padx=20, pady=(10, 0))
 
-        # 底部：整理方式 + 操作按钮 + 状态栏
-        bottom = ttk.Frame(self.root, padding=10)
-        bottom.pack(fill=tk.X)
+        mode_row = tk.Frame(bottom_card, bg=CARD)
+        mode_row.pack(fill=tk.X, padx=10, pady=(10, 0))
 
-        ttk.Label(bottom, text="整理方式：").pack(side=tk.LEFT)
+        tk.Label(mode_row, text="整理方式", bg=CARD, fg=SUBTEXT,
+                 font=_font(9, True)).pack(side=tk.LEFT, padx=(4, 10))
+
         self.mode_var = tk.StringVar(value="type")
-        ttk.Radiobutton(bottom, text="按类型", variable=self.mode_var,
+        ttk.Radiobutton(mode_row, text="按类型", variable=self.mode_var,
                         value="type").pack(side=tk.LEFT)
-        ttk.Radiobutton(bottom, text="按日期", variable=self.mode_var,
+        ttk.Radiobutton(mode_row, text="按日期", variable=self.mode_var,
                         value="date").pack(side=tk.LEFT, padx=(0, 14))
 
         self.recursive_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(bottom, text="包含子文件夹",
+        ttk.Checkbutton(mode_row, text="包含子文件夹",
                         variable=self.recursive_var).pack(side=tk.LEFT, padx=(0, 14))
 
-        self.btn_scan = ttk.Button(bottom, text="② 扫描预览", command=self.do_scan,
-                                   state=tk.DISABLED)
-        self.btn_scan.pack(side=tk.LEFT, padx=(0, 6))
-        self.btn_run = ttk.Button(bottom, text="③ 执行整理", command=self.do_execute,
-                                  state=tk.DISABLED)
-        self.btn_run.pack(side=tk.LEFT, padx=(0, 6))
-        self.btn_undo = ttk.Button(bottom, text="④ 撤销上次", command=self.do_undo,
-                                   state=tk.DISABLED)
-        self.btn_undo.pack(side=tk.LEFT)
-        self.btn_rules = ttk.Button(bottom, text="⑤ 规则管理", command=self.edit_rules)
-        self.btn_rules.pack(side=tk.LEFT, padx=(16, 0))
-        self.btn_rename = ttk.Button(bottom, text="⑥ 批量重命名",
-                                     command=self.open_rename)
-        self.btn_rename.pack(side=tk.LEFT, padx=(6, 0))
+        if HAS_DND:
+            tk.Label(mode_row,
+                     text="提示：也可以直接把文件/文件夹拖进窗口",
+                     bg=CARD, fg=SUBTEXT, font=_font(9)).pack(side=tk.RIGHT, padx=4)
 
+        btn_row = tk.Frame(bottom_card, bg=CARD)
+        btn_row.pack(fill=tk.X, padx=10, pady=(6, 10))
+
+        self.btn_scan = tk.Button(btn_row, text="② 扫描预览", command=self.do_scan,
+                                  state=tk.DISABLED)
+        _style_button(self.btn_scan, ACCENT, "#ffffff", ACCENT_HOVER)
+        self.btn_scan.pack(side=tk.LEFT, padx=(4, 8))
+
+        self.btn_run = tk.Button(btn_row, text="③ 执行整理", command=self.do_execute,
+                                 state=tk.DISABLED)
+        _style_button(self.btn_run, ACCENT, "#ffffff", ACCENT_HOVER)
+        self.btn_run.pack(side=tk.LEFT, padx=(0, 8))
+
+        self.btn_undo = tk.Button(btn_row, text="④ 撤销上次", command=self.do_undo,
+                                  state=tk.DISABLED)
+        _style_button(self.btn_undo, ACCENT_SOFT, ACCENT, "#d3e0fa")
+        self.btn_undo.pack(side=tk.LEFT, padx=(0, 8))
+
+        self.btn_rules = tk.Button(btn_row, text="⑤ 规则管理", command=self.edit_rules)
+        _style_button(self.btn_rules, "#e2e6ef", SUBTEXT, "#d2d8e5", bold=False)
+        self.btn_rules.pack(side=tk.LEFT, padx=(16, 0))
+
+        self.btn_rename = tk.Button(btn_row, text="⑥ 批量重命名",
+                                    command=self.open_rename)
+        _style_button(self.btn_rename, "#e2e6ef", SUBTEXT, "#d2d8e5", bold=False)
+        self.btn_rename.pack(side=tk.LEFT, padx=(8, 0))
+
+        # ===== 状态栏 =====
         self.status_var = tk.StringVar(
             value=("请选择一个文件夹（或直接把它拖进窗口）" if HAS_DND
                    else "请先选择要整理的文件夹"))
-        ttk.Label(self.root, textvariable=self.status_var, padding=(10, 4),
-                  foreground="#555555").pack(fill=tk.X)
+        status = tk.Label(self.root, textvariable=self.status_var,
+                          bg="#e5e9f2", fg=SUBTEXT, anchor=tk.W,
+                          font=_font(9), padx=14, pady=7)
+        status.pack(fill=tk.X, side=tk.BOTTOM)
 
         # 拖拽支持：整个窗口都接受拖入
         if HAS_DND and hasattr(self.root, "drop_target_register"):
@@ -175,8 +327,8 @@ class WorkbenchApp:
         for i, act in enumerate(self.plan):
             suffix = ("." + act["file"].rsplit(".", 1)[-1]) if "." in act["file"] else "（无）"
             status_text = {"OK": "✔ 将移动",
-                          "CONFLICT": "⚠ 同名冲突",
-                          "SKIP": "— 跳过"}[act["status"]]
+                           "CONFLICT": "⚠ 同名冲突",
+                           "SKIP": "— 跳过"}[act["status"]]
             tag = {"OK": "ok", "CONFLICT": "conflict", "SKIP": "skip"}[act["status"]]
             self.tree.insert("", tk.END, iid=str(i), tags=(tag,),
                              values=(act["file"], suffix, act["action"], status_text))
@@ -245,28 +397,31 @@ class WorkbenchApp:
         self.status_var.set(f"撤销完成：恢复 {restored} 个文件")
         self.do_scan()
 
-
     # ---------- 规则管理 ----------
 
     def edit_rules(self):
         """⑤ 规则管理：打开一个小窗口编辑分类规则，保存后下次扫描生效。"""
         win = tk.Toplevel(self.root)
         win.title("分类规则管理")
-        win.geometry("520x460")
+        win.geometry("540x480")
         win.transient(self.root)
+        win.configure(bg=CARD)
 
-        ttk.Label(
+        tk.Label(
             win,
             text="每行一条规则，格式：类别名称: .扩展名1 .扩展名2\n"
                  "例如：图片: .jpg .png    （保存后，下次「扫描预览」生效）",
-            padding=8, justify=tk.LEFT,
+            bg=CARD, fg=SUBTEXT, font=_font(9), justify=tk.LEFT, padx=12, pady=10,
         ).pack(anchor=tk.W)
 
-        text = tk.Text(win, wrap=tk.NONE, font=("Consolas", 11))
-        text.pack(fill=tk.BOTH, expand=True, padx=8)
+        text = tk.Text(win, wrap=tk.NONE, font=("Consolas", 11),
+                       bg="#f6f8fc", fg=TEXT, relief="flat",
+                       highlightthickness=1, highlightcolor=ACCENT,
+                       highlightbackground=BORDER)
+        text.pack(fill=tk.BOTH, expand=True, padx=12)
         text.insert("1.0", core.rules_to_text(core.load_rules()))
 
-        btns = ttk.Frame(win, padding=8)
+        btns = tk.Frame(win, bg=CARD, padx=12, pady=10)
         btns.pack(fill=tk.X)
 
         def on_save():
@@ -283,10 +438,17 @@ class WorkbenchApp:
             text.delete("1.0", tk.END)
             text.insert("1.0", core.rules_to_text(core.DEFAULT_RULES))
 
-        ttk.Button(btns, text="保存", command=on_save).pack(side=tk.RIGHT)
-        ttk.Button(btns, text="恢复默认规则", command=on_default).pack(
-            side=tk.RIGHT, padx=6)
-        ttk.Button(btns, text="取消", command=win.destroy).pack(side=tk.RIGHT)
+        btn_cancel = tk.Button(btns, text="取消", command=win.destroy)
+        _style_button(btn_cancel, "#e2e6ef", SUBTEXT, "#d2d8e5", bold=False)
+        btn_cancel.pack(side=tk.RIGHT)
+
+        btn_default = tk.Button(btns, text="恢复默认规则", command=on_default)
+        _style_button(btn_default, ACCENT_SOFT, ACCENT, "#d3e0fa")
+        btn_default.pack(side=tk.RIGHT, padx=8)
+
+        btn_save = tk.Button(btns, text="保存", command=on_save)
+        _style_button(btn_save, ACCENT, "#ffffff", ACCENT_HOVER)
+        btn_save.pack(side=tk.RIGHT)
 
     # ---------- 批量重命名（v0.1.5） ----------
 
@@ -304,45 +466,68 @@ class WorkbenchApp:
 
         win = tk.Toplevel(self.root)
         win.title("批量重命名")
-        win.geometry("560x520")
+        win.geometry("580x560")
         win.transient(self.root)
+        win.configure(bg=CARD)
 
-        ttk.Label(win, text=f"当前文件夹：{folder}（点「刷新」可重新加载文件列表）",
-                  padding=8, wraplength=540, justify=tk.LEFT).pack(anchor=tk.W)
+        tk.Label(win, text=f"当前文件夹：{folder}（点「刷新」可重新加载文件列表）",
+                 bg=CARD, fg=SUBTEXT, font=_font(9), padx=12, pady=10,
+                 wraplength=550, justify=tk.LEFT).pack(anchor=tk.W)
 
         # 左：可选文件列表（可多选）；右：预览结果
-        lists = ttk.Frame(win, padding=(8, 0))
+        lists = tk.Frame(win, bg=CARD, padx=12)
         lists.pack(fill=tk.BOTH, expand=True)
 
-        ttk.Label(lists, text="要改名的文件（按住 Ctrl 点选多个）：").pack(anchor=tk.W)
-        src_list = tk.Listbox(lists, selectmode=tk.EXTENDED, height=8, exportselection=False)
-        src_list.pack(fill=tk.BOTH, expand=True)
+        tk.Label(lists, text="要改名的文件（按住 Ctrl 点选多个）：",
+                 bg=CARD, fg=TEXT, font=_font(9, True)).pack(anchor=tk.W)
+        src_list = tk.Listbox(lists, selectmode=tk.EXTENDED, height=8,
+                              exportselection=False, font=_font(10),
+                              bg="#f6f8fc", fg=TEXT, relief="flat",
+                              highlightthickness=1, highlightcolor=ACCENT,
+                              highlightbackground=BORDER, activestyle="none")
+        src_list.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
         for f in files:
             src_list.insert(tk.END, f)
 
-        ttk.Label(lists, text="改名方式：", padding=(0, 8, 0, 0)).pack(anchor=tk.W)
-        opts = ttk.Frame(lists)
-        opts.pack(anchor=tk.W)
+        tk.Label(lists, text="改名方式：", bg=CARD, fg=TEXT,
+                 font=_font(10), padx=(0, 0), pady=(10, 0)).pack(anchor=tk.W)
+        opts = tk.Frame(lists, bg=CARD)
+        opts.pack(anchor=tk.W, pady=(2, 0))
         rmode = tk.StringVar(value="serial")
         ttk.Radiobutton(opts, text="加序号", variable=rmode,
                         value="serial").pack(side=tk.LEFT)
         ttk.Radiobutton(opts, text="查找替换", variable=rmode,
                         value="replace").pack(side=tk.LEFT, padx=(10, 0))
 
-        params = ttk.Frame(lists)
-        params.pack(anchor=tk.W, pady=4)
-        ttk.Label(params, text="前缀：").pack(side=tk.LEFT)
-        prefix_var = tk.StringVar(value="照片-")
-        ttk.Entry(params, textvariable=prefix_var, width=14).pack(side=tk.LEFT)
-        ttk.Label(params, text="   查找：").pack(side=tk.LEFT)
-        find_var = tk.StringVar()
-        ttk.Entry(params, textvariable=find_var, width=10).pack(side=tk.LEFT)
-        ttk.Label(params, text="→替换为：").pack(side=tk.LEFT)
-        replace_var = tk.StringVar()
-        ttk.Entry(params, textvariable=replace_var, width=10).pack(side=tk.LEFT)
+        params = tk.Frame(lists, bg=CARD)
+        params.pack(anchor=tk.W, pady=6)
+        tk.Label(params, text="前缀：", bg=CARD, fg=TEXT,
+                 font=_font(10)).pack(side=tk.LEFT)
 
-        preview = tk.Listbox(lists, height=8, exportselection=False)
-        preview.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+        def _mini_entry(parent, var, width):
+            e = tk.Entry(parent, textvariable=var, width=width,
+                         bg="#f6f8fc", fg=TEXT, relief="flat", font=_font(10),
+                         highlightthickness=1, highlightcolor=ACCENT,
+                         highlightbackground=BORDER)
+            e.pack(side=tk.LEFT, ipady=3)
+            return e
+
+        prefix_var = tk.StringVar(value="照片-")
+        _mini_entry(params, prefix_var, 14)
+        tk.Label(params, text="   查找：", bg=CARD, fg=TEXT,
+                 font=_font(10)).pack(side=tk.LEFT)
+        find_var = tk.StringVar()
+        _mini_entry(params, find_var, 10)
+        tk.Label(params, text="→替换为：", bg=CARD, fg=TEXT,
+                 font=_font(10)).pack(side=tk.LEFT)
+        replace_var = tk.StringVar()
+        _mini_entry(params, replace_var, 10)
+
+        preview = tk.Listbox(lists, height=8, exportselection=False,
+                             font=_font(10), bg="#f6f8fc", fg=TEXT, relief="flat",
+                             highlightthickness=1, highlightcolor=ACCENT,
+                             highlightbackground=BORDER, activestyle="none")
+        preview.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
         state = {"plan": []}
 
         def do_preview():
@@ -389,13 +574,21 @@ class WorkbenchApp:
             win.destroy()
             self.do_scan()
 
-        btns = ttk.Frame(lists, padding=(0, 8))
+        btns = tk.Frame(lists, bg=CARD, pady=10)
         btns.pack(fill=tk.X)
-        ttk.Button(btns, text="预览改名", command=do_preview).pack(side=tk.LEFT)
-        btn_run = ttk.Button(btns, text="确认改名", command=do_run,
-                             state=tk.DISABLED)
-        btn_run.pack(side=tk.LEFT, padx=6)
-        ttk.Button(btns, text="关闭", command=win.destroy).pack(side=tk.RIGHT)
+
+        btn_preview = tk.Button(btns, text="预览改名", command=do_preview)
+        _style_button(btn_preview, ACCENT_SOFT, ACCENT, "#d3e0fa")
+        btn_preview.pack(side=tk.LEFT)
+
+        btn_run = tk.Button(btns, text="确认改名", command=do_run,
+                            state=tk.DISABLED)
+        _style_button(btn_run, ACCENT, "#ffffff", ACCENT_HOVER)
+        btn_run.pack(side=tk.LEFT, padx=8)
+
+        btn_close = tk.Button(btns, text="关闭", command=win.destroy)
+        _style_button(btn_close, "#e2e6ef", SUBTEXT, "#d2d8e5", bold=False)
+        btn_close.pack(side=tk.RIGHT)
 
 
 def main():
