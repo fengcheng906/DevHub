@@ -21,7 +21,7 @@ import csv
 import os
 
 APP_NAME = "数据处理助手"
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.1.1"
 
 # 依次尝试的编码：Excel 导出的中文 CSV 常见 utf-8-sig 和 gbk 两种
 ENCODINGS = ("utf-8-sig", "utf-8", "gbk", "gb18030")

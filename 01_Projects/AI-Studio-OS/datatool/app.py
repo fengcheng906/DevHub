@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-数据处理助手 v0.1 —— 图形界面
+数据处理助手 v0.1.1 —— 图形界面（精修版）
 项目：AI 个人工作室操作系统（AI Personal Studio OS）
 
 怎么打开这个软件：
@@ -9,7 +9,20 @@
 使用顺序：
     ① 选择 CSV 文件 → 勾选清洗选项 → ② 预览清洗结果
     → ③ 统计信息 / ④ 导出结果（导出的是新文件，原文件绝不被修改）
+
+v0.1.1 界面精修：高分屏适配（文字不发虚）、现代配色、卡片式布局。
 """
+
+import ctypes
+
+# 高分屏适配：必须在创建窗口之前调用，否则整窗文字发虚
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+except Exception:
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
 
 import os
 import tkinter as tk
@@ -18,6 +31,35 @@ from tkinter import ttk, filedialog, messagebox
 import core
 
 PREVIEW_MAX_ROWS = 50  # 预览最多显示多少行，防止大表格卡住界面
+
+# ---------------- 配色（一套统一的高级感配色） ----------------
+BG = "#eef1f7"          # 窗口底色：浅灰蓝
+CARD = "#ffffff"        # 卡片底色：纯白
+BORDER = "#dde3ee"      # 卡片描边
+TEXT = "#1f2430"        # 正文：深灰黑
+SUBTEXT = "#7a8499"     # 次要文字：灰
+ACCENT = "#356ae6"      # 主色：沉静的蓝
+ACCENT_HOVER = "#2456c4"
+ACCENT_SOFT = "#e3ecfd"  # 主色的浅色底（选中行、次按钮用）
+DANGER = "#e05935"
+
+
+def _font(size=10, bold=False):
+    """统一字体：微软雅黑，大小可调。"""
+    return ("Microsoft YaHei UI", size, "bold" if bold else "normal")
+
+
+def _style_button(btn, bg, fg, hover_bg, bold=True):
+    """把按钮做成扁平精致样式，并带鼠标悬停变色。"""
+    btn.configure(
+        bg=bg, fg=fg,
+        activebackground=hover_bg, activeforeground=fg,
+        relief="flat", bd=0, cursor="hand2",
+        padx=16, pady=7, font=_font(10, bold),
+        disabledforeground="#aab2c5",
+    )
+    btn.bind("<Enter>", lambda e: btn.configure(bg=hover_bg))
+    btn.bind("<Leave>", lambda e: btn.configure(bg=bg))
 
 
 class DataToolApp:
@@ -32,37 +74,117 @@ class DataToolApp:
         self.encoding = ""
 
         root.title(f"{core.APP_NAME} v{core.APP_VERSION}")
-        root.geometry("900x620")
-        root.minsize(780, 520)
+        root.geometry("960x680")
+        root.minsize(860, 600)
+        root.configure(bg=BG)
 
         self._build_ui()
 
     # ---------- 界面搭建 ----------
 
     def _build_ui(self):
-        # 顶部：文件选择
-        top = ttk.Frame(self.root, padding=10)
-        top.pack(fill=tk.X)
+        # clam 主题：唯一能自定义所有颜色的主题
+        style = ttk.Style(self.root)
+        style.theme_use("clam")
 
-        ttk.Label(top, text="CSV 文件：").pack(side=tk.LEFT)
+        # 表格样式：去边框、加行高、选中行用浅蓝
+        style.configure(
+            "Treeview",
+            background=CARD, fieldbackground=CARD, foreground=TEXT,
+            rowheight=32, font=_font(10), borderwidth=0,
+        )
+        style.configure(
+            "Treeview.Heading",
+            background="#f3f5fa", foreground=TEXT,
+            font=_font(10, True), padding=(10, 9), relief="flat",
+        )
+        style.map(
+            "Treeview",
+            background=[("selected", ACCENT_SOFT)],
+            foreground=[("selected", TEXT)],
+        )
+        style.map(
+            "Treeview.Heading",
+            background=[("active", "#e8ecf5")],
+        )
+
+        # 勾选框样式
+        style.configure(
+            "TCheckbutton",
+            background=CARD, foreground=TEXT, font=_font(10),
+        )
+
+        # 滚动条样式
+        style.configure(
+            "Vertical.TScrollbar",
+            background="#e6eaf3", troughcolor=BG,
+            borderwidth=0, arrowcolor=SUBTEXT, relief="flat",
+        )
+
+        # ===== 顶部标题区 =====
+        header = tk.Frame(self.root, bg=BG)
+        header.pack(fill=tk.X, padx=20, pady=(16, 4))
+        tk.Label(header, text=core.APP_NAME, bg=BG, fg=TEXT,
+                 font=_font(17, True)).pack(side=tk.LEFT)
+        tk.Label(header, text=f"  v{core.APP_VERSION}", bg=BG, fg=SUBTEXT,
+                 font=_font(10)).pack(side=tk.LEFT, pady=(6, 0))
+        tk.Label(header, text="把杂乱的表格数据洗干净、数清楚",
+                 bg=BG, fg=SUBTEXT, font=_font(10)).pack(side=tk.RIGHT, pady=(8, 0))
+
+        # ===== 文件选择卡片 =====
+        file_card = tk.Frame(self.root, bg=CARD,
+                             highlightbackground=BORDER, highlightthickness=1)
+        file_card.pack(fill=tk.X, padx=20, pady=10)
+
+        tk.Label(file_card, text="CSV 文件", bg=CARD, fg=SUBTEXT,
+                 font=_font(9, True)).pack(side=tk.LEFT, padx=(14, 6), pady=10)
+
         self.file_var = tk.StringVar(value="（还没有选择文件）")
-        ttk.Entry(top, textvariable=self.file_var, state="readonly").pack(
-            side=tk.LEFT, fill=tk.X, expand=True, padx=6)
-        ttk.Button(top, text="① 选择 CSV 文件", command=self.choose_file).pack(side=tk.LEFT)
+        file_entry = tk.Entry(
+            file_card, textvariable=self.file_var,
+            bg="#f6f8fc", fg=TEXT, readonlybackground="#f6f8fc",
+            relief="flat", font=_font(10),
+            highlightthickness=1, highlightcolor=ACCENT, highlightbackground=BORDER,
+        )
+        file_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10), ipady=5)
 
-        # 中部：数据预览表格
-        mid = ttk.Frame(self.root, padding=(10, 0))
-        mid.pack(fill=tk.BOTH, expand=True)
+        btn_choose = tk.Button(file_card, text="① 选择 CSV 文件",
+                               command=self.choose_file)
+        _style_button(btn_choose, ACCENT, "#ffffff", ACCENT_HOVER)
+        btn_choose.pack(side=tk.RIGHT, padx=(0, 12), pady=8)
 
-        self.tree = ttk.Treeview(mid, show="headings")
-        self.scroll_y = ttk.Scrollbar(mid, orient=tk.VERTICAL, command=self.tree.yview)
+        # ===== 数据预览区（标题 + 表格） =====
+        mid = tk.Frame(self.root, bg=BG)
+        mid.pack(fill=tk.BOTH, expand=True, padx=20)
+
+        tk.Label(mid, text="数据预览", bg=BG, fg=SUBTEXT,
+                 font=_font(9, True)).pack(anchor=tk.W, pady=(2, 4))
+
+        table_card = tk.Frame(mid, bg=CARD,
+                              highlightbackground=BORDER, highlightthickness=1)
+        table_card.pack(fill=tk.BOTH, expand=True)
+
+        self.tree = ttk.Treeview(table_card, show="headings")
+        self.tree.tag_configure("even", background="#f7f9fd")
+        self.tree.tag_configure("odd", background=CARD)
+        self.scroll_y = ttk.Scrollbar(table_card, orient=tk.VERTICAL,
+                                      command=self.tree.yview)
         self.tree.configure(yscrollcommand=self.scroll_y.set)
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # 选项区：清洗方式勾选
-        opts = ttk.LabelFrame(self.root, text="清洗选项", padding=8)
-        opts.pack(fill=tk.X, padx=10, pady=(8, 0))
+        # ===== 清洗选项卡片 =====
+        opts_card = tk.Frame(self.root, bg=CARD,
+                             highlightbackground=BORDER, highlightthickness=1)
+        opts_card.pack(fill=tk.X, padx=20, pady=(10, 0))
+
+        tk.Label(opts_card, text="清洗选项", bg=CARD, fg=SUBTEXT,
+                 font=_font(9, True)).pack(anchor=tk.W, padx=14, pady=(10, 2))
+
+        row1 = tk.Frame(opts_card, bg=CARD)
+        row1.pack(fill=tk.X, padx=10)
+        row2 = tk.Frame(opts_card, bg=CARD)
+        row2.pack(fill=tk.X, padx=10, pady=(0, 10))
 
         self.var_trim = tk.BooleanVar(value=True)
         self.var_empty_rows = tk.BooleanVar(value=True)
@@ -71,30 +193,56 @@ class DataToolApp:
         self.var_drop_missing = tk.BooleanVar(value=False)
         self.var_numeric = tk.BooleanVar(value=True)
 
-        ttk.Checkbutton(opts, text="去首尾空格", variable=self.var_trim).pack(side=tk.LEFT, padx=4)
-        ttk.Checkbutton(opts, text="删整行空白", variable=self.var_empty_rows).pack(side=tk.LEFT, padx=4)
-        ttk.Checkbutton(opts, text="删整列空白", variable=self.var_empty_cols).pack(side=tk.LEFT, padx=4)
-        ttk.Checkbutton(opts, text="删重复行", variable=self.var_dedup).pack(side=tk.LEFT, padx=4)
-        ttk.Checkbutton(opts, text="删含空白格的行", variable=self.var_drop_missing).pack(side=tk.LEFT, padx=4)
-        ttk.Checkbutton(opts, text="智能数字列", variable=self.var_numeric).pack(side=tk.LEFT, padx=4)
+        for parent, text, var in (
+            (row1, "去首尾空格", self.var_trim),
+            (row1, "删整行空白", self.var_empty_rows),
+            (row1, "删整列空白", self.var_empty_cols),
+            (row2, "删重复行", self.var_dedup),
+            (row2, "删含空白格的行", self.var_drop_missing),
+            (row2, "智能数字列", self.var_numeric),
+        ):
+            ttk.Checkbutton(parent, text=text, variable=var).pack(
+                side=tk.LEFT, padx=6, pady=4)
 
-        ttk.Label(opts, text="空白格填成：").pack(side=tk.LEFT, padx=(10, 2))
+        tk.Label(row2, text="空白格填成：", bg=CARD, fg=TEXT,
+                 font=_font(10)).pack(side=tk.LEFT, padx=(14, 2))
         self.fill_var = tk.StringVar(value="")
-        ttk.Entry(opts, textvariable=self.fill_var, width=8).pack(side=tk.LEFT)
-        ttk.Label(opts, text="（留空 = 不填）").pack(side=tk.LEFT, padx=2)
+        fill_entry = tk.Entry(
+            row2, textvariable=self.fill_var, width=8,
+            bg="#f6f8fc", fg=TEXT, relief="flat", font=_font(10),
+            highlightthickness=1, highlightcolor=ACCENT, highlightbackground=BORDER,
+        )
+        fill_entry.pack(side=tk.LEFT, ipady=3)
+        tk.Label(row2, text="（留空 = 不填）", bg=CARD, fg=SUBTEXT,
+                 font=_font(9)).pack(side=tk.LEFT, padx=4)
 
-        # 底部：操作按钮 + 状态栏
-        bottom = ttk.Frame(self.root, padding=10)
-        bottom.pack(fill=tk.X)
+        # ===== 底部操作按钮 =====
+        bottom = tk.Frame(self.root, bg=BG)
+        bottom.pack(fill=tk.X, padx=20, pady=12)
 
-        ttk.Button(bottom, text="② 预览清洗结果", command=self.preview_clean).pack(side=tk.LEFT, padx=4)
-        ttk.Button(bottom, text="③ 统计信息", command=self.show_stats).pack(side=tk.LEFT, padx=4)
-        ttk.Button(bottom, text="④ 导出结果", command=self.export_result).pack(side=tk.LEFT, padx=4)
-        ttk.Button(bottom, text="恢复原始预览", command=self.show_raw).pack(side=tk.LEFT, padx=4)
+        btn_preview = tk.Button(bottom, text="② 预览清洗结果",
+                                command=self.preview_clean)
+        _style_button(btn_preview, ACCENT, "#ffffff", ACCENT_HOVER)
+        btn_preview.pack(side=tk.LEFT, padx=(0, 8))
 
+        btn_stats = tk.Button(bottom, text="③ 统计信息", command=self.show_stats)
+        _style_button(btn_stats, ACCENT_SOFT, ACCENT, "#d3e0fa")
+        btn_stats.pack(side=tk.LEFT, padx=(0, 8))
+
+        btn_export = tk.Button(bottom, text="④ 导出结果", command=self.export_result)
+        _style_button(btn_export, ACCENT, "#ffffff", ACCENT_HOVER)
+        btn_export.pack(side=tk.LEFT, padx=(0, 8))
+
+        btn_raw = tk.Button(bottom, text="恢复原始预览", command=self.show_raw)
+        _style_button(btn_raw, "#e2e6ef", SUBTEXT, "#d2d8e5", bold=False)
+        btn_raw.pack(side=tk.LEFT)
+
+        # ===== 状态栏 =====
         self.status_var = tk.StringVar(value="请先选择一个 CSV 文件")
-        ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN,
-                  anchor=tk.W, padding=(10, 4)).pack(fill=tk.X, side=tk.BOTTOM)
+        status = tk.Label(self.root, textvariable=self.status_var,
+                          bg="#e5e9f2", fg=SUBTEXT, anchor=tk.W,
+                          font=_font(9), padx=14, pady=7)
+        status.pack(fill=tk.X, side=tk.BOTTOM)
 
     # ---------- 数据展示 ----------
 
@@ -105,13 +253,13 @@ class DataToolApp:
             return
         cols = [f"c{i}" for i in range(len(self.cur_headers))]
         self.tree.configure(columns=cols)
-        width = max(80, min(220, 760 // max(1, len(cols))))
+        width = max(90, min(240, 820 // max(1, len(cols))))
         for i, h in enumerate(self.cur_headers):
             self.tree.heading(f"c{i}", text=h or f"第{i + 1}列")
             self.tree.column(f"c{i}", width=width, anchor=tk.W)
-        for r in self.cur_rows[:PREVIEW_MAX_ROWS]:
-            self.tree.insert("", tk.END, values=r)
-        tag = "cleaned" if self.cleaned else "raw"
+        for idx, r in enumerate(self.cur_rows[:PREVIEW_MAX_ROWS]):
+            self.tree.insert("", tk.END, values=r,
+                             tags=("even",) if idx % 2 == 0 else ("odd",))
         note = "清洗后" if self.cleaned else "原始数据"
         shown = min(len(self.cur_rows), PREVIEW_MAX_ROWS)
         more = f"，仅预览前 {PREVIEW_MAX_ROWS} 行" if len(self.cur_rows) > PREVIEW_MAX_ROWS else ""
