@@ -2,6 +2,9 @@
 # 练习用文件夹，不进版本库
 02_Learning/试一试/
 
+# 虚拟试验区（只是模拟界面，随时可整文件夹删除，不进版本库）
+06_Prototype/
+
 # GUI 冒烟测试临时文件
 01_Projects/AI-Studio-OS/workbench/tests/gui_smoke/
 
