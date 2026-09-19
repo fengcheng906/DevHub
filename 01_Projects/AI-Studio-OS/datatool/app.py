@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-数据处理助手 v0.2.0 —— 图形界面
+数据处理助手 v0.2.1 —— 图形界面
 项目：AI 个人工作室操作系统（AI Personal Studio OS）
 
 怎么打开这个软件：
@@ -8,9 +8,12 @@
 
 使用顺序：
     ① 选择 CSV 文件 → 勾选清洗选项 → ② 预览清洗结果
-    → 筛选 / 排序 / 画图 → ③ 统计信息 / ④ 导出结果
+    → ⑤ 筛选 / 排序 / ⑥ 画图 → ③ 统计信息 / ④ 导出结果
     （导出的是新文件，原文件绝不被修改）
+    （每个按钮名下面还有一句大白话说明，是干什么的一眼就看懂）
 
+v0.2.1 按钮大白话：按钮分两行显示，名字下面加括号说明（用户拍板）；
+        顺手修了编号：画图从重复的「⑤」改成「⑥」，功能零改动。
 v0.2.0 新增：按条件筛选行、按列排序、柱状图。
 v0.1.1 界面精修：高分屏适配（文字不发虚）、现代配色、卡片式布局。
 """
@@ -150,7 +153,7 @@ class DataToolApp:
         )
         file_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10), ipady=5)
 
-        btn_choose = tk.Button(file_card, text="① 选择 CSV 文件",
+        btn_choose = tk.Button(file_card, text="① 选择 CSV 文件\n（选表格文件）",
                                command=self.choose_file)
         _style_button(btn_choose, ACCENT, "#ffffff", ACCENT_HOVER)
         btn_choose.pack(side=tk.RIGHT, padx=(0, 12), pady=8)
@@ -257,10 +260,11 @@ class DataToolApp:
                  highlightthickness=1, highlightcolor=ACCENT,
                  highlightbackground=BORDER).pack(side=tk.LEFT, padx=4, ipady=3)
 
-        btn_filter = tk.Button(frow, text="⑤ 筛选", command=self.apply_filter)
+        btn_filter = tk.Button(frow, text="⑤ 筛选\n（按条件挑行）",
+                               command=self.apply_filter)
         _style_button(btn_filter, ACCENT, "#ffffff", ACCENT_HOVER)
         btn_filter.pack(side=tk.LEFT, padx=(8, 4))
-        btn_unfilter = tk.Button(frow, text="清除筛选/排序",
+        btn_unfilter = tk.Button(frow, text="清除筛选/排序（回到全部）",
                                  command=self.clear_filter)
         _style_button(btn_unfilter, "#e2e6ef", SUBTEXT, "#d2d8e5", bold=False)
         btn_unfilter.pack(side=tk.LEFT, padx=4)
@@ -273,10 +277,12 @@ class DataToolApp:
                                      width=10, **_combo_style())
         self.sort_col.pack(side=tk.LEFT, padx=4)
 
-        btn_up = tk.Button(srow, text="升序 ↑", command=lambda: self.apply_sort(False))
+        btn_up = tk.Button(srow, text="升序 ↑（小到大）",
+                           command=lambda: self.apply_sort(False))
         _style_button(btn_up, ACCENT_SOFT, ACCENT, "#d3e0fa")
         btn_up.pack(side=tk.LEFT, padx=(8, 4))
-        btn_down = tk.Button(srow, text="降序 ↓", command=lambda: self.apply_sort(True))
+        btn_down = tk.Button(srow, text="降序 ↓（大到小）",
+                             command=lambda: self.apply_sort(True))
         _style_button(btn_down, ACCENT_SOFT, ACCENT, "#d3e0fa")
         btn_down.pack(side=tk.LEFT, padx=4)
 
@@ -287,24 +293,29 @@ class DataToolApp:
         bottom = tk.Frame(self.root, bg=BG)
         bottom.pack(fill=tk.X, padx=20, pady=12)
 
-        btn_preview = tk.Button(bottom, text="② 预览清洗结果",
+        # 按钮名后括号里是一句大白话说明（用户拍板：不换名，加括号标注）
+        btn_preview = tk.Button(bottom, text="② 预览清洗结果\n（先看怎么变）",
                                 command=self.preview_clean)
         _style_button(btn_preview, ACCENT, "#ffffff", ACCENT_HOVER)
         btn_preview.pack(side=tk.LEFT, padx=(0, 8))
 
-        btn_stats = tk.Button(bottom, text="③ 统计信息", command=self.show_stats)
+        btn_stats = tk.Button(bottom, text="③ 统计信息\n（每列的概况）",
+                              command=self.show_stats)
         _style_button(btn_stats, ACCENT_SOFT, ACCENT, "#d3e0fa")
         btn_stats.pack(side=tk.LEFT, padx=(0, 8))
 
-        btn_chart = tk.Button(bottom, text="⑤ 画柱状图", command=self.show_chart)
+        btn_chart = tk.Button(bottom, text="⑥ 画柱状图\n（按筛那列出图）",
+                              command=self.show_chart)
         _style_button(btn_chart, ACCENT_SOFT, ACCENT, "#d3e0fa")
         btn_chart.pack(side=tk.LEFT, padx=(0, 8))
 
-        btn_export = tk.Button(bottom, text="④ 导出结果", command=self.export_result)
+        btn_export = tk.Button(bottom, text="④ 导出结果\n（存新文件，不动原件）",
+                               command=self.export_result)
         _style_button(btn_export, ACCENT, "#ffffff", ACCENT_HOVER)
         btn_export.pack(side=tk.LEFT, padx=(0, 8))
 
-        btn_raw = tk.Button(bottom, text="恢复原始预览", command=self.show_raw)
+        btn_raw = tk.Button(bottom, text="恢复原始预览\n（撤掉清洗显示）",
+                            command=self.show_raw)
         _style_button(btn_raw, "#e2e6ef", SUBTEXT, "#d2d8e5", bold=False)
         btn_raw.pack(side=tk.LEFT)
 

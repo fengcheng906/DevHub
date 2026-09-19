@@ -25,3 +25,6 @@
 01_Projects/AI-Studio-OS/workbench/build/
 01_Projects/AI-Studio-OS/workbench/dist/
 01_Projects/AI-Studio-OS/workbench/*.spec
+01_Projects/AI-Studio-OS/expcalc/build/
+01_Projects/AI-Studio-OS/expcalc/dist/
+01_Projects/AI-Studio-OS/expcalc/*.spec

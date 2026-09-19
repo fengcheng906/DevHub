@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-智能文件工作台 v0.1.7 —— 图形界面（精修版）
+智能文件工作台 v0.1.8 —— 图形界面（精修版）
 项目：AI 个人工作室操作系统（AI Personal Studio OS）
 
 怎么打开这个软件：
@@ -8,7 +8,9 @@
 
 界面按钮从左到右按顺序用就行：
     ① 选择文件夹 ② 扫描预览 ③ 执行整理 ④ 撤销上次 ⑤ 规则管理 ⑥ 批量重命名
+    （每个按钮名下面还有一句大白话说明，是干什么的一眼就看懂）
 
+v0.1.8 按钮大白话：按钮分两行显示，名字下面加括号说明（用户拍板），功能零改动。
 v0.1.7 界面精修：高分屏适配（文字不发虚）、现代配色、卡片式布局，功能零改动。
 """
 
@@ -162,7 +164,7 @@ class WorkbenchApp:
         folder_entry.pack(side=tk.LEFT, fill=tk.X, expand=True,
                           padx=(0, 10), ipady=5)
 
-        btn_choose = tk.Button(folder_card, text="① 选择文件夹",
+        btn_choose = tk.Button(folder_card, text="① 选择文件夹\n（选要整理的地方）",
                                command=self.choose_folder)
         _style_button(btn_choose, ACCENT, "#ffffff", ACCENT_HOVER)
         btn_choose.pack(side=tk.RIGHT, padx=(0, 12), pady=8)
@@ -229,26 +231,28 @@ class WorkbenchApp:
         btn_row = tk.Frame(bottom_card, bg=CARD)
         btn_row.pack(fill=tk.X, padx=10, pady=(6, 10))
 
-        self.btn_scan = tk.Button(btn_row, text="② 扫描预览", command=self.do_scan,
-                                  state=tk.DISABLED)
+        # 按钮名后括号里是一句大白话说明（用户拍板：不换名，加括号标注）
+        self.btn_scan = tk.Button(btn_row, text="② 扫描预览\n（先演习，不动真文件）",
+                                  command=self.do_scan, state=tk.DISABLED)
         _style_button(self.btn_scan, ACCENT, "#ffffff", ACCENT_HOVER)
         self.btn_scan.pack(side=tk.LEFT, padx=(4, 8))
 
-        self.btn_run = tk.Button(btn_row, text="③ 执行整理", command=self.do_execute,
-                                 state=tk.DISABLED)
+        self.btn_run = tk.Button(btn_row, text="③ 执行整理\n（真动手，可撤销）",
+                                 command=self.do_execute, state=tk.DISABLED)
         _style_button(self.btn_run, ACCENT, "#ffffff", ACCENT_HOVER)
         self.btn_run.pack(side=tk.LEFT, padx=(0, 8))
 
-        self.btn_undo = tk.Button(btn_row, text="④ 撤销上次", command=self.do_undo,
-                                  state=tk.DISABLED)
+        self.btn_undo = tk.Button(btn_row, text="④ 撤销上次\n（反悔，恢复原样）",
+                                  command=self.do_undo, state=tk.DISABLED)
         _style_button(self.btn_undo, ACCENT_SOFT, ACCENT, "#d3e0fa")
         self.btn_undo.pack(side=tk.LEFT, padx=(0, 8))
 
-        self.btn_rules = tk.Button(btn_row, text="⑤ 规则管理", command=self.edit_rules)
+        self.btn_rules = tk.Button(btn_row, text="⑤ 规则管理\n（哪些进哪个夹）",
+                                   command=self.edit_rules)
         _style_button(self.btn_rules, "#e2e6ef", SUBTEXT, "#d2d8e5", bold=False)
         self.btn_rules.pack(side=tk.LEFT, padx=(16, 0))
 
-        self.btn_rename = tk.Button(btn_row, text="⑥ 批量重命名",
+        self.btn_rename = tk.Button(btn_row, text="⑥ 批量重命名\n（一次改一批）",
                                     command=self.open_rename)
         _style_button(self.btn_rename, "#e2e6ef", SUBTEXT, "#d2d8e5", bold=False)
         self.btn_rename.pack(side=tk.LEFT, padx=(8, 0))
